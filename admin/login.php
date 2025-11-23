@@ -1,21 +1,20 @@
 <?php
-$page_title = "Admin Login";
-require_once __DIR__ . '/../inc/header.php';
+if (session_status() === PHP_SESSION_NONE) session_start();
+
 require_once __DIR__ . '/../inc/db.php';
-require_once __DIR__ . '/../inc/auth.php';
 require_once __DIR__ . '/../inc/functions.php';
 require_once __DIR__ . '/../inc/auth.php';
+
 redirect_if_admin_logged_in();
 redirect_if_citizen_logged_in();
-
-
 
 $errors = [];
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
-    if ($username === '' || $password === '') $errors[] = 'Username and password required';
-    else {
+    if ($username === '' || $password === '') {
+        $errors[] = 'Username and password required';
+    } else {
         if (admin_login($username, $password)) {
             header('Location: index.php');
             exit;
@@ -24,6 +23,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
+
+$page_title = "Admin Login";
+require_once __DIR__ . '/../inc/header.php';
 ?>
 <div class="container-box col-lg-5 mx-auto">
   <h3 class="mb-3">Official / Admin Login</h3>

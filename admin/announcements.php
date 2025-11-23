@@ -57,7 +57,7 @@ if ($filter === 'declined') $where = "a.status='declined'";
 if ($filter === 'completed') $where = "a.status='completed'";
 
 $stmt = $db->query("
-    SELECT a.*, c.first_name, c.last_name
+    SELECT a.*, c.first_name, c.last_name, c.profile_picture
     FROM appointments a
     JOIN citizens c ON a.citizen_id = c.citizen_id
     WHERE $where
@@ -98,10 +98,21 @@ $appointments = $stmt->fetch_all(MYSQLI_ASSOC);
         </tr>
     </thead>
     <tbody>
-        <?php foreach($appointments as $a): ?>
+        <?php foreach($appointments as $a): 
+          $citizenPic = !empty($a['profile_picture']) ? $a['profile_picture'] : null;
+          $defaultPic = 'data:image/svg+xml;base64,' . base64_encode('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="20" fill="#dee2e6"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="20" fill="#6c757d">' . strtoupper(substr($a['first_name'] ?? 'U', 0, 1)) . '</text></svg>');
+        ?>
         <tr>
             <td><?= esc($a['appointment_id']) ?></td>
-            <td><?= esc($a['first_name'].' '.$a['last_name']) ?></td>
+            <td>
+              <div class="d-flex align-items-center">
+                <img src="<?= $citizenPic ? esc('/elog_barangay/public/' . $citizenPic) : $defaultPic ?>" 
+                     alt="Profile" 
+                     class="rounded-circle me-2" 
+                     style="width: 40px; height: 40px; object-fit: cover;">
+                <span><?= esc($a['first_name'].' '.$a['last_name']) ?></span>
+              </div>
+            </td>
             <td><?= esc($a['service_type']) ?></td>
             <td><?= esc($a['preferred_date']) ?></td>
             <td><?= esc($a['queue_number']) ?></td>

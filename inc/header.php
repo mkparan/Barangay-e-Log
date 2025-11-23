@@ -1,5 +1,6 @@
 <?php
 if (session_status() === PHP_SESSION_NONE) session_start();
+require_once __DIR__ . '/functions.php';
 $brandColor = '#0033A0'; // GOV BLUE
 ?>
 <!doctype html>
@@ -110,13 +111,34 @@ $brandColor = '#0033A0'; // GOV BLUE
     <div class="collapse navbar-collapse" id="navMenu">
       <ul class="navbar-nav ms-auto align-items-center">
         <li class="nav-item"><a class="nav-link" href="/elog_barangay/public/index.php">Home</a></li>
-        <?php if (!empty($_SESSION['citizen'])): ?>
+        <?php if (!empty($_SESSION['citizen'])): 
+          // Get profile picture
+          $citizenPic = null;
+          if (!empty($_SESSION['citizen']['citizen_id'])) {
+            if (!function_exists('db_connect')) {
+              require_once __DIR__ . '/db.php';
+            }
+            $db = db_connect();
+            $picStmt = $db->prepare("SELECT profile_picture FROM citizens WHERE citizen_id = ?");
+            $picStmt->bind_param('i', $_SESSION['citizen']['citizen_id']);
+            $picStmt->execute();
+            $picResult = $picStmt->get_result();
+            if ($picRow = $picResult->fetch_assoc()) {
+              $citizenPic = $picRow['profile_picture'];
+            }
+          }
+          $defaultPic = 'data:image/svg+xml;base64,' . base64_encode('<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#dee2e6"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="18" fill="#6c757d">' . strtoupper(substr($_SESSION['citizen']['name'] ?? 'U', 0, 1)) . '</text></svg>');
+        ?>
+          <li class="nav-item"><a class="nav-link" href="/elog_barangay/public/dashboard.php">Dashboard</a></li>
           <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle" href="#" id="citizenMenu" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-              Menu
+            <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="citizenMenu" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+              <img src="<?= $citizenPic ? esc('/elog_barangay/public/' . $citizenPic) : $defaultPic ?>" 
+                   alt="Profile" 
+                   class="rounded-circle me-2" 
+                   style="width: 32px; height: 32px; object-fit: cover;">
+              <span><?= esc($_SESSION['citizen']['name']) ?></span>
             </a>
             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="citizenMenu">
-              <li><a class="dropdown-item" href="/elog_barangay/public/dashboard.php"><i class="bi bi-house-door me-2"></i>Dashboard</a></li>
               <li><a class="dropdown-item" href="/elog_barangay/public/create_appointment.php"><i class="bi bi-calendar-plus me-2"></i>Create Appointment</a></li>
               <li><a class="dropdown-item" href="/elog_barangay/public/history.php"><i class="bi bi-clock-history me-2"></i>History</a></li>
               <li><hr class="dropdown-divider"></li>
@@ -124,9 +146,39 @@ $brandColor = '#0033A0'; // GOV BLUE
               <li><a class="dropdown-item" href="/elog_barangay/public/logout.php"><i class="bi bi-box-arrow-right me-2"></i>Logout</a></li>
             </ul>
           </li>
-        <?php elseif (!empty($_SESSION['user'])): ?>
+        <?php elseif (!empty($_SESSION['user'])): 
+          // Get profile picture
+          $adminPic = null;
+          if (!empty($_SESSION['user']['user_id'])) {
+            if (!function_exists('db_connect')) {
+              require_once __DIR__ . '/db.php';
+            }
+            $db = db_connect();
+            $picStmt = $db->prepare("SELECT profile_picture FROM users WHERE user_id = ?");
+            $picStmt->bind_param('i', $_SESSION['user']['user_id']);
+            $picStmt->execute();
+            $picResult = $picStmt->get_result();
+            if ($picRow = $picResult->fetch_assoc()) {
+              $adminPic = $picRow['profile_picture'];
+            }
+          }
+          $defaultPic = 'data:image/svg+xml;base64,' . base64_encode('<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#dee2e6"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="18" fill="#6c757d">' . strtoupper(substr($_SESSION['user']['full_name'] ?? 'U', 0, 1)) . '</text></svg>');
+        ?>
           <li class="nav-item"><a class="nav-link" href="/elog_barangay/admin/index.php">Dashboard</a></li>
-          <li class="nav-item"><a class="nav-link" href="/elog_barangay/admin/logout.php">Logout</a></li>
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="adminMenu" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+              <img src="<?= $adminPic ? esc('/elog_barangay/public/' . $adminPic) : $defaultPic ?>" 
+                   alt="Profile" 
+                   class="rounded-circle me-2" 
+                   style="width: 32px; height: 32px; object-fit: cover;">
+              <span><?= esc($_SESSION['user']['full_name']) ?></span>
+            </a>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="adminMenu">
+              <li><a class="dropdown-item" href="/elog_barangay/admin/profile.php"><i class="bi bi-person-circle me-2"></i>Profile</a></li>
+              <li><hr class="dropdown-divider"></li>
+              <li><a class="dropdown-item" href="/elog_barangay/admin/logout.php"><i class="bi bi-box-arrow-right me-2"></i>Logout</a></li>
+            </ul>
+          </li>
         <?php else: ?>
           <li class="nav-item"><a class="nav-link" href="/elog_barangay/public/register.php">Register as Citizen</a></li>
           <li class="nav-item"><a class="nav-link" href="/elog_barangay/public/login.php">Citizen Login</a></li>

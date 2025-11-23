@@ -82,7 +82,7 @@ $recentActivity = $recentStmt ? $recentStmt->fetch_all(MYSQLI_ASSOC) : [];
 
 // Pending queue
 $pendingStmt = $db->prepare("
-    SELECT a.*, c.first_name, c.last_name
+    SELECT a.*, c.first_name, c.last_name, c.profile_picture
     FROM appointments a
     JOIN citizens c ON a.citizen_id = c.citizen_id
     WHERE a.status = 'pending'
@@ -226,9 +226,20 @@ $pendingAppointmentsRows = $pendingStmt->get_result()->fetch_all(MYSQLI_ASSOC);
               </tr>
             </thead>
             <tbody>
-              <?php foreach($pendingAppointmentsRows as $p): ?>
+              <?php foreach($pendingAppointmentsRows as $p): 
+                $citizenPic = !empty($p['profile_picture']) ? $p['profile_picture'] : null;
+                $defaultPic = 'data:image/svg+xml;base64,' . base64_encode('<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#dee2e6"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="18" fill="#6c757d">' . strtoupper(substr($p['first_name'] ?? 'U', 0, 1)) . '</text></svg>');
+              ?>
                 <tr>
-                  <td><?= esc($p['first_name'].' '.$p['last_name']) ?></td>
+                  <td>
+                    <div class="d-flex align-items-center">
+                      <img src="<?= $citizenPic ? esc('/elog_barangay/public/' . $citizenPic) : $defaultPic ?>" 
+                           alt="Profile" 
+                           class="rounded-circle me-2" 
+                           style="width: 32px; height: 32px; object-fit: cover;">
+                      <span><?= esc($p['first_name'].' '.$p['last_name']) ?></span>
+                    </div>
+                  </td>
                   <td><?= esc($p['service_type']) ?></td>
                   <td><?= esc($p['preferred_date']) ?></td>
                   <td><?= esc($p['queue_number']) ?></td>
