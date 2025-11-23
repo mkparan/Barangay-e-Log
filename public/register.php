@@ -1,9 +1,13 @@
 <?php
-$page_title = "Register - Barangay e-Log";
-require_once __DIR__ . '/../inc/header.php';
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 require_once __DIR__ . '/../inc/db.php';
 require_once __DIR__ . '/../inc/functions.php';
 require_once __DIR__ . '/../inc/auth.php';
+redirect_if_admin_logged_in();
+redirect_if_citizen_logged_in();
 
 $db = db_connect();
 
@@ -40,6 +44,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
+
+$page_title = "Register - Barangay e-Log";
+require_once __DIR__ . '/../inc/header.php';
 ?>
 <div class="container-box col-lg-6 mx-auto">
   <h3 class="mb-3">Citizen Registration</h3>
