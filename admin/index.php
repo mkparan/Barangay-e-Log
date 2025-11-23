@@ -94,22 +94,9 @@ $pendingAppointmentsRows = $pendingStmt->get_result()->fetch_all(MYSQLI_ASSOC);
 ?>
 
 <div class="container-box mb-4">
-  <div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3">
-    <div>
-      <h4 class="mb-1">Admin Dashboard</h4>
-      <p class="text-muted mb-0">Monitor citizen appointments, document releases, and upcoming schedules at a glance.</p>
-    </div>
-    <div class="text-md-end">
-      <div class="small text-muted mb-1">Signed in as <?= esc($user['full_name']) ?></div>
-      <a href="logout.php" class="btn btn-outline-secondary btn-sm">Logout</a>
-    </div>
-  </div>
-
-  <div class="d-flex flex-wrap gap-2 mt-4">
-    <a href="announcements.php" class="btn btn-primary btn-sm">Manage Appointments</a>
-    <a href="appointments.php" class="btn btn-outline-primary btn-sm">Citizen Announcements</a>
-    <a href="duty_roster.php" class="btn btn-outline-primary btn-sm">Duty Roster</a>
-    <a href="presence.php" class="btn btn-outline-primary btn-sm">Presence</a>
+  <div>
+    <h4 class="mb-1">Admin Dashboard</h4>
+    <p class="text-muted mb-0">Monitor citizen appointments, document releases, and upcoming schedules at a glance.</p>
   </div>
 </div>
 
