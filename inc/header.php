@@ -111,8 +111,19 @@ $brandColor = '#0033A0'; // GOV BLUE
       <ul class="navbar-nav ms-auto align-items-center">
         <li class="nav-item"><a class="nav-link" href="/elog_barangay/public/index.php">Home</a></li>
         <?php if (!empty($_SESSION['citizen'])): ?>
-          <li class="nav-item"><a class="nav-link" href="/elog_barangay/public/dashboard.php">Dashboard</a></li>
-          <li class="nav-item"><a class="nav-link" href="/elog_barangay/public/logout.php">Logout</a></li>
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="citizenMenu" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+              Menu
+            </a>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="citizenMenu">
+              <li><a class="dropdown-item" href="/elog_barangay/public/dashboard.php"><i class="bi bi-house-door me-2"></i>Dashboard</a></li>
+              <li><a class="dropdown-item" href="/elog_barangay/public/create_appointment.php"><i class="bi bi-calendar-plus me-2"></i>Create Appointment</a></li>
+              <li><a class="dropdown-item" href="/elog_barangay/public/history.php"><i class="bi bi-clock-history me-2"></i>History</a></li>
+              <li><hr class="dropdown-divider"></li>
+              <li><a class="dropdown-item" href="/elog_barangay/public/profile.php"><i class="bi bi-person-circle me-2"></i>Profile</a></li>
+              <li><a class="dropdown-item" href="/elog_barangay/public/logout.php"><i class="bi bi-box-arrow-right me-2"></i>Logout</a></li>
+            </ul>
+          </li>
         <?php elseif (!empty($_SESSION['user'])): ?>
           <li class="nav-item"><a class="nav-link" href="/elog_barangay/admin/index.php">Dashboard</a></li>
           <li class="nav-item"><a class="nav-link" href="/elog_barangay/admin/logout.php">Logout</a></li>
