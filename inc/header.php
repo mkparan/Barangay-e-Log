@@ -9,6 +9,11 @@ $brandColor = '#0033A0'; // GOV BLUE
 <meta charset="utf-8">
 <title><?= $page_title ?? 'e-Log Barangay' ?></title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Favicon -->
+<link rel="icon" type="image/png" sizes="32x32" href="/elog_barangay/public/favicon.php?size=32">
+<link rel="icon" type="image/png" sizes="16x16" href="/elog_barangay/public/favicon.php?size=16">
+<link rel="icon" type="image/png" sizes="48x48" href="/elog_barangay/public/favicon.php?size=48">
+<link rel="apple-touch-icon" sizes="180x180" href="/elog_barangay/public/favicon.php?size=180">
 <!-- Bootstrap 5 CDN -->
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 <!-- Bootstrap Icons -->
