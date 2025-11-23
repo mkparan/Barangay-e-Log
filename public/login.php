@@ -36,6 +36,8 @@ $page_title = "Citizen Login";
 require_once __DIR__ . '/../inc/header.php';
 ?>
 
+<br>
+<br>
 <div class="row login-layout g-4">
     <div class="col-12 col-md-6 col-lg-4">
         <div class="container-box shadow-sm h-100">

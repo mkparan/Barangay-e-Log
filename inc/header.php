@@ -174,8 +174,8 @@ $brandColor = '#0033A0'; // GOV BLUE
               <span><?= esc($_SESSION['user']['full_name']) ?></span>
             </a>
             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="adminMenu">
-              <li><a class="dropdown-item" href="/elog_barangay/admin/announcements.php"><i class="bi bi-calendar-check me-2"></i>Manage Appointments</a></li>
-              <li><a class="dropdown-item" href="/elog_barangay/admin/appointments.php"><i class="bi bi-megaphone me-2"></i>Citizen Announcements</a></li>
+              <li><a class="dropdown-item" href="/elog_barangay/admin/appointments.php"><i class="bi bi-calendar-check me-2"></i>Manage Appointments</a></li>
+              <li><a class="dropdown-item" href="/elog_barangay/admin/announcements.php"><i class="bi bi-megaphone me-2"></i>Citizen Announcements</a></li>
               <li><a class="dropdown-item" href="/elog_barangay/admin/duty_roster.php"><i class="bi bi-calendar-week me-2"></i>Duty Roster</a></li>
               <li><a class="dropdown-item" href="/elog_barangay/admin/presence.php"><i class="bi bi-clock-history me-2"></i>Presence</a></li>
               <li><a class="dropdown-item" href="/elog_barangay/admin/history.php"><i class="bi bi-journal-text me-2"></i>Appointment History</a></li>

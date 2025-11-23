@@ -364,7 +364,7 @@ $pendingAppointmentsRows = $pendingStmt->get_result()->fetch_all(MYSQLI_ASSOC);
     <div class="container-box h-100">
       <div class="d-flex justify-content-between align-items-center mb-2">
         <h5 class="mb-0">Pending queue</h5>
-        <a href="announcements.php" class="btn btn-link btn-sm">View all</a>
+        <a href="appointments.php" class="btn btn-link btn-sm">View all</a>
       </div>
       <?php if(empty($pendingAppointmentsRows)): ?>
         <div class="alert alert-info mb-0">No pending appointments.</div>
@@ -399,10 +399,10 @@ $pendingAppointmentsRows = $pendingStmt->get_result()->fetch_all(MYSQLI_ASSOC);
                   <td><?= esc($p['preferred_date']) ?></td>
                   <td><?= esc($p['queue_number']) ?></td>
                   <td class="text-end">
-                    <a href="announcements.php?action=approve&id=<?= esc($p['appointment_id']) ?>" class="btn btn-sm btn-outline-success me-1">Approve</a>
-                    <a href="announcements.php?action=decline&id=<?= esc($p['appointment_id']) ?>" class="btn btn-sm btn-outline-danger me-1">Decline</a>
-                    <a href="announcements.php?action=reschedule&id=<?= esc($p['appointment_id']) ?>" class="btn btn-sm btn-outline-warning me-1">Resched</a>
-                    <a href="announcements.php?action=complete&id=<?= esc($p['appointment_id']) ?>" class="btn btn-sm btn-success">Mark Released</a>
+                    <a href="appointments.php?action=approve&id=<?= esc($p['appointment_id']) ?>" class="btn btn-sm btn-outline-success me-1">Approve</a>
+                    <a href="appointments.php?action=decline&id=<?= esc($p['appointment_id']) ?>" class="btn btn-sm btn-outline-danger me-1">Decline</a>
+                    <a href="appointments.php?action=reschedule&id=<?= esc($p['appointment_id']) ?>" class="btn btn-sm btn-outline-warning me-1">Resched</a>
+                    <a href="appointments.php?action=complete&id=<?= esc($p['appointment_id']) ?>" class="btn btn-sm btn-success">Mark Released</a>
                   </td>
                 </tr>
               <?php endforeach; ?>
