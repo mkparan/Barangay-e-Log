@@ -1,16 +1,13 @@
 <?php
-$page_title = "Citizen Login";
-require_once __DIR__ . '/../inc/header.php';
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 require_once __DIR__ . '/../inc/db.php';
 require_once __DIR__ . '/../inc/functions.php';
 require_once __DIR__ . '/../inc/auth.php';
 redirect_if_admin_logged_in();
 redirect_if_citizen_logged_in();
-
-
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 
 $db = db_connect();
 $errors = [];
@@ -34,6 +31,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = "CIN not found. Please register.";
     }
 }
+
+$page_title = "Citizen Login";
+require_once __DIR__ . '/../inc/header.php';
 ?>
 
 <div class="row login-layout g-4">
@@ -60,14 +60,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </div>
 
-    <div class="col-12 col-md-6 col-lg-7 ms-lg-auto">
-        <div class="container-box mock-icon-card h-100 d-flex flex-column align-items-center justify-content-center text-center">
-            <div class="mock-icon-circle mb-3">
-                LOGO
-            </div>
-            <p class="mb-1 fw-semibold text-uppercase text-muted small">Barangay Seal Placeholder</p>
-            <small class="text-muted">Replace this panel with the official icon.</small>
-        </div>
+    <div class="col-12 col-md-6 col-lg-7 ms-lg-auto d-flex align-items-center justify-content-center">
+        <img src="/elog_barangay/public/assets/images/logo.png" alt="Barangay Duangan Logo" style="max-width: 400px; max-height: 400px; width: 100%; height: auto; object-fit: contain;">
     </div>
 </div>
 

@@ -99,18 +99,22 @@ $brandColor = '#0033A0'; // GOV BLUE
 
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary-custom mb-4">
   <div class="container">
-    <a class="navbar-brand" href="/elog_barangay/public/index.php">Barangay e-Log</a>
+    <a class="navbar-brand d-flex align-items-center" href="/elog_barangay/public/index.php">
+      <img src="/elog_barangay/public/assets/images/logo.png" alt="Barangay Duangan Logo" class="me-2" style="height: 48px; width: 48px; object-fit: contain;">
+      Barangay e-Log
+    </a>
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu">
       <span class="navbar-toggler-icon"></span>
     </button>
 
     <div class="collapse navbar-collapse" id="navMenu">
       <ul class="navbar-nav ms-auto align-items-center">
+        <li class="nav-item"><a class="nav-link" href="/elog_barangay/public/index.php">Home</a></li>
         <?php if (!empty($_SESSION['citizen'])): ?>
           <li class="nav-item"><a class="nav-link" href="/elog_barangay/public/dashboard.php">Dashboard</a></li>
           <li class="nav-item"><a class="nav-link" href="/elog_barangay/public/logout.php">Logout</a></li>
         <?php elseif (!empty($_SESSION['user'])): ?>
-          <li class="nav-item"><a class="nav-link" href="/elog_barangay/admin/index.php">Admin</a></li>
+          <li class="nav-item"><a class="nav-link" href="/elog_barangay/admin/index.php">Dashboard</a></li>
           <li class="nav-item"><a class="nav-link" href="/elog_barangay/admin/logout.php">Logout</a></li>
         <?php else: ?>
           <li class="nav-item"><a class="nav-link" href="/elog_barangay/public/register.php">Register as Citizen</a></li>
