@@ -44,6 +44,35 @@ if ($filter_status) {
     $types .= 's';
 }
 
+// Pagination - must be before query execution
+$page = max(1, (int)($_GET['page'] ?? 1));
+$perPage = 20;
+$offset = ($page - 1) * $perPage;
+
+// Get total count for pagination
+$countSql = "
+    SELECT COUNT(*) as total
+    FROM appointments a
+    LEFT JOIN users u ON a.official_id = u.user_id
+    JOIN citizens c ON a.citizen_id = c.citizen_id
+    WHERE $where
+";
+$countStmt = $db->prepare($countSql);
+if (!empty($params)) {
+    $countStmt->bind_param($types, ...$params);
+}
+$countStmt->execute();
+$totalCount = (int)($countStmt->get_result()->fetch_assoc()['total'] ?? 0);
+$totalPages = max(1, ceil($totalCount / $perPage));
+
+// Get unique services for filter dropdown
+$servicesStmt = $db->query("SELECT DISTINCT service_type FROM appointments ORDER BY service_type");
+$availableServices = $servicesStmt ? $servicesStmt->fetch_all(MYSQLI_ASSOC) : [];
+
+// Get unique statuses for filter dropdown
+$statusesStmt = $db->query("SELECT DISTINCT status FROM appointments ORDER BY status");
+$availableStatuses = $statusesStmt ? $statusesStmt->fetch_all(MYSQLI_ASSOC) : [];
+
 $sql = "
     SELECT 
         a.*,
@@ -56,28 +85,38 @@ $sql = "
     JOIN citizens c ON a.citizen_id = c.citizen_id
     WHERE $where
     ORDER BY a.created_at DESC
+    LIMIT ? OFFSET ?
 ";
 
 $stmt = $db->prepare($sql);
 if (!empty($params)) {
-    $stmt->bind_param($types, ...$params);
+    $bindTypes = $types . 'ii';
+    $bindParams = array_merge($params, [$perPage, $offset]);
+    $stmt->bind_param($bindTypes, ...$bindParams);
+} else {
+    $stmt->bind_param('ii', $perPage, $offset);
 }
 $stmt->execute();
 $appointments = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-
-// Get unique services for filter dropdown
-$servicesStmt = $db->query("SELECT DISTINCT service_type FROM appointments ORDER BY service_type");
-$availableServices = $servicesStmt ? $servicesStmt->fetch_all(MYSQLI_ASSOC) : [];
-
-// Get unique statuses for filter dropdown
-$statusesStmt = $db->query("SELECT DISTINCT status FROM appointments ORDER BY status");
-$availableStatuses = $statusesStmt ? $statusesStmt->fetch_all(MYSQLI_ASSOC) : [];
 
 // Chart filters
 $chart_date_from = $_GET['chart_date_from'] ?? date('Y-m-01', strtotime('-11 months'));
 $chart_date_to = $_GET['chart_date_to'] ?? date('Y-m-t');
 $pie_month = $_GET['pie_month'] ?? date('m');
 $pie_year = $_GET['pie_year'] ?? date('Y');
+
+// Validate and limit date range (max 90 days for performance)
+$startDate = new DateTime($chart_date_from);
+$endDate = new DateTime($chart_date_to);
+$daysDiff = $startDate->diff($endDate)->days;
+
+if ($daysDiff > 90) {
+    // Limit to last 90 days if range is too large
+    $chart_date_to = date('Y-m-d');
+    $chart_date_from = date('Y-m-d', strtotime('-90 days'));
+    $endDate = new DateTime($chart_date_to);
+    $startDate = new DateTime($chart_date_from);
+}
 
 // Line chart data (appointments by date)
 $chartStartDate = $chart_date_from;
@@ -93,23 +132,46 @@ $chartStmt->bind_param('ss', $chartStartDate, $chartEndDate);
 $chartStmt->execute();
 $chartData = $chartStmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
-// Create date range for chart
+// Create date range for chart (limit to 90 days max, use daily or weekly grouping)
 $chartLabels = [];
 $chartValues = [];
-$start = new DateTime($chart_date_from);
-$end = new DateTime($chart_date_to);
-$interval = new DateInterval('P1D');
-$dateRange = new DatePeriod($start, $interval, $end->modify('+1 day'));
-
 $chartDataMap = [];
+
 foreach ($chartData as $row) {
     $chartDataMap[$row['date']] = (int)$row['total'];
 }
 
-foreach ($dateRange as $date) {
-    $dateStr = $date->format('Y-m-d');
-    $chartLabels[] = $date->format('M d');
-    $chartValues[] = $chartDataMap[$dateStr] ?? 0;
+// If range is large, group by week; otherwise daily
+if ($daysDiff > 30) {
+    // Group by week for better performance
+    $current = clone $startDate;
+    $current->modify('monday this week'); // Start from Monday
+    while ($current <= $endDate) {
+        $weekEnd = clone $current;
+        $weekEnd->modify('+6 days');
+        if ($weekEnd > $endDate) $weekEnd = clone $endDate;
+        
+        $weekTotal = 0;
+        $checkDate = clone $current;
+        while ($checkDate <= $weekEnd) {
+            $dateStr = $checkDate->format('Y-m-d');
+            $weekTotal += $chartDataMap[$dateStr] ?? 0;
+            $checkDate->modify('+1 day');
+        }
+        
+        $chartLabels[] = $current->format('M d') . ' - ' . $weekEnd->format('M d');
+        $chartValues[] = $weekTotal;
+        $current->modify('+7 days');
+    }
+} else {
+    // Daily grouping
+    $current = clone $startDate;
+    while ($current <= $endDate) {
+        $dateStr = $current->format('Y-m-d');
+        $chartLabels[] = $current->format('M d');
+        $chartValues[] = $chartDataMap[$dateStr] ?? 0;
+        $current->modify('+1 day');
+    }
 }
 
 // Pie chart data (services by month/year)
@@ -181,7 +243,7 @@ require_once __DIR__ . '/../inc/header.php';
 
   <div class="row g-4 mb-4">
     <div class="col-lg-4">
-      <div class="container-box h-100">
+      <div class="container-box">
         <div class="d-flex justify-content-between align-items-center mb-3">
           <h5 class="mb-0">Appointments Over Time</h5>
         </div>
@@ -193,10 +255,14 @@ require_once __DIR__ . '/../inc/header.php';
           <label class="form-label small">Date To</label>
           <input type="date" id="chartDateTo" class="form-control form-control-sm" value="<?= esc($chart_date_to) ?>">
         </div>
-        <button type="button" class="btn btn-sm btn-primary w-100" onclick="updateChart()">Update Chart</button>
-        <div class="ratio ratio-16x9 mt-3">
-          <canvas id="lineChart"></canvas>
-        </div>
+        <button type="button" class="btn btn-sm btn-primary w-100 mb-3" onclick="updateChart()">Update Chart</button>
+        <?php if(empty($chartLabels)): ?>
+          <div class="alert alert-info mb-0">No appointment data for the selected date range.</div>
+        <?php else: ?>
+          <div style="height: 250px;">
+            <canvas id="lineChart"></canvas>
+          </div>
+        <?php endif; ?>
       </div>
       
       <div class="container-box mt-4">
@@ -224,17 +290,27 @@ require_once __DIR__ . '/../inc/header.php';
           </div>
         </div>
         <button type="button" class="btn btn-sm btn-primary w-100 mb-3" onclick="updatePieChart()">Update Chart</button>
-        <div class="ratio ratio-1x1">
-          <canvas id="pieChart"></canvas>
-        </div>
+        <?php if(empty($pieLabels)): ?>
+          <div class="alert alert-info mb-0">No appointment data for this period.</div>
+        <?php else: ?>
+          <div style="height: 250px;">
+            <canvas id="pieChart"></canvas>
+          </div>
+        <?php endif; ?>
       </div>
     </div>
     
     <div class="col-lg-8">
-      <?php if(empty($appointments)): ?>
-        <div class="alert alert-info">No appointments found matching your filters.</div>
-      <?php else: ?>
-        <div class="table-responsive">
+      <div class="container-box">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="mb-0">Appointment Records</h5>
+          <span class="badge bg-primary"><?= number_format($totalCount) ?> total</span>
+        </div>
+        
+        <?php if(empty($appointments)): ?>
+          <div class="alert alert-info">No appointments found matching your filters.</div>
+        <?php else: ?>
+          <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
       <table class="table table-striped table-hover align-middle">
         <thead class="table-light">
           <tr>
@@ -286,10 +362,72 @@ require_once __DIR__ . '/../inc/header.php';
               </td>
             </tr>
           <?php endforeach; ?>
-        </tbody>
-        </table>
+          </tbody>
+          </table>
+          </div>
+          
+          <?php if($totalPages > 1): ?>
+            <nav aria-label="Page navigation" class="mt-3">
+              <ul class="pagination pagination-sm justify-content-center mb-0">
+                <?php if($page > 1): ?>
+                  <li class="page-item">
+                    <a class="page-link" href="?page=<?= $page - 1 ?><?= $filter_date_from ? '&date_from='.urlencode($filter_date_from) : '' ?><?= $filter_date_to ? '&date_to='.urlencode($filter_date_to) : '' ?><?= $filter_service ? '&service='.urlencode($filter_service) : '' ?><?= $filter_status ? '&status='.urlencode($filter_status) : '' ?><?= $chart_date_from ? '&chart_date_from='.urlencode($chart_date_from) : '' ?><?= $chart_date_to ? '&chart_date_to='.urlencode($chart_date_to) : '' ?><?= $pie_month ? '&pie_month='.urlencode($pie_month) : '' ?><?= $pie_year ? '&pie_year='.urlencode($pie_year) : '' ?>">Previous</a>
+                  </li>
+                <?php else: ?>
+                  <li class="page-item disabled">
+                    <span class="page-link">Previous</span>
+                  </li>
+                <?php endif; ?>
+                
+                <?php
+                $startPage = max(1, $page - 2);
+                $endPage = min($totalPages, $page + 2);
+                
+                if ($startPage > 1): ?>
+                  <li class="page-item">
+                    <a class="page-link" href="?page=1<?= $filter_date_from ? '&date_from='.urlencode($filter_date_from) : '' ?><?= $filter_date_to ? '&date_to='.urlencode($filter_date_to) : '' ?><?= $filter_service ? '&service='.urlencode($filter_service) : '' ?><?= $filter_status ? '&status='.urlencode($filter_status) : '' ?><?= $chart_date_from ? '&chart_date_from='.urlencode($chart_date_from) : '' ?><?= $chart_date_to ? '&chart_date_to='.urlencode($chart_date_to) : '' ?><?= $pie_month ? '&pie_month='.urlencode($pie_month) : '' ?><?= $pie_year ? '&pie_year='.urlencode($pie_year) : '' ?>">1</a>
+                  </li>
+                  <?php if ($startPage > 2): ?>
+                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                  <?php endif; ?>
+                <?php endif; ?>
+                
+                <?php for($i = $startPage; $i <= $endPage; $i++): ?>
+                  <li class="page-item <?= $i == $page ? 'active' : '' ?>">
+                    <a class="page-link" href="?page=<?= $i ?><?= $filter_date_from ? '&date_from='.urlencode($filter_date_from) : '' ?><?= $filter_date_to ? '&date_to='.urlencode($filter_date_to) : '' ?><?= $filter_service ? '&service='.urlencode($filter_service) : '' ?><?= $filter_status ? '&status='.urlencode($filter_status) : '' ?><?= $chart_date_from ? '&chart_date_from='.urlencode($chart_date_from) : '' ?><?= $chart_date_to ? '&chart_date_to='.urlencode($chart_date_to) : '' ?><?= $pie_month ? '&pie_month='.urlencode($pie_month) : '' ?><?= $pie_year ? '&pie_year='.urlencode($pie_year) : '' ?>"><?= $i ?></a>
+                  </li>
+                <?php endfor; ?>
+                
+                <?php if ($endPage < $totalPages): ?>
+                  <?php if ($endPage < $totalPages - 1): ?>
+                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                  <?php endif; ?>
+                  <li class="page-item">
+                    <a class="page-link" href="?page=<?= $totalPages ?><?= $filter_date_from ? '&date_from='.urlencode($filter_date_from) : '' ?><?= $filter_date_to ? '&date_to='.urlencode($filter_date_to) : '' ?><?= $filter_service ? '&service='.urlencode($filter_service) : '' ?><?= $filter_status ? '&status='.urlencode($filter_status) : '' ?><?= $chart_date_from ? '&chart_date_from='.urlencode($chart_date_from) : '' ?><?= $chart_date_to ? '&chart_date_to='.urlencode($chart_date_to) : '' ?><?= $pie_month ? '&pie_month='.urlencode($pie_month) : '' ?><?= $pie_year ? '&pie_year='.urlencode($pie_year) : '' ?>"><?= $totalPages ?></a>
+                  </li>
+                <?php endif; ?>
+                
+                <?php if($page < $totalPages): ?>
+                  <li class="page-item">
+                    <a class="page-link" href="?page=<?= $page + 1 ?><?= $filter_date_from ? '&date_from='.urlencode($filter_date_from) : '' ?><?= $filter_date_to ? '&date_to='.urlencode($filter_date_to) : '' ?><?= $filter_service ? '&service='.urlencode($filter_service) : '' ?><?= $filter_status ? '&status='.urlencode($filter_status) : '' ?><?= $chart_date_from ? '&chart_date_from='.urlencode($chart_date_from) : '' ?><?= $chart_date_to ? '&chart_date_to='.urlencode($chart_date_to) : '' ?><?= $pie_month ? '&pie_month='.urlencode($pie_month) : '' ?><?= $pie_year ? '&pie_year='.urlencode($pie_year) : '' ?>">Next</a>
+                  </li>
+                <?php else: ?>
+                  <li class="page-item disabled">
+                    <span class="page-link">Next</span>
+                  </li>
+                <?php endif; ?>
+              </ul>
+              <div class="text-center mt-2">
+                <small class="text-muted">Showing <?= $offset + 1 ?>-<?= min($offset + $perPage, $totalCount) ?> of <?= number_format($totalCount) ?> appointments</small>
+              </div>
+            </nav>
+          <?php else: ?>
+            <div class="text-center mt-3">
+              <small class="text-muted">Showing <?= $totalCount ?> appointment<?= $totalCount != 1 ? 's' : '' ?></small>
+            </div>
+          <?php endif; ?>
+        <?php endif; ?>
       </div>
-      <?php endif; ?>
     </div>
   </div>
 </div>
@@ -323,6 +461,12 @@ require_once __DIR__ . '/../inc/header.php';
           y: {
             beginAtZero: true,
             ticks: { precision: 0 }
+          },
+          x: {
+            ticks: {
+              maxRotation: 45,
+              minRotation: 45
+            }
           }
         },
         plugins: {
@@ -335,25 +479,41 @@ require_once __DIR__ . '/../inc/header.php';
   // Pie Chart
   const pieCtx = document.getElementById('pieChart');
   if (pieCtx) {
-    const pieData = {
-      labels: <?= json_encode($pieLabels) ?>,
-      datasets: [{
-        data: <?= json_encode($pieValues) ?>,
-        backgroundColor: <?= json_encode(array_slice($pieColors, 0, count($pieLabels))) ?>
-      }]
-    };
+    const pieLabelsData = <?= json_encode($pieLabels) ?>;
+    const pieValuesData = <?= json_encode($pieValues) ?>;
     
-    new Chart(pieCtx, {
-      type: 'pie',
-      data: pieData,
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: true, position: 'bottom' }
+    if (pieLabelsData.length > 0 && pieValuesData.length > 0) {
+      const pieData = {
+        labels: pieLabelsData,
+        datasets: [{
+          data: pieValuesData,
+          backgroundColor: <?= json_encode(array_slice($pieColors, 0, max(count($pieLabels), 1))) ?>
+        }]
+      };
+      
+      new Chart(pieCtx, {
+        type: 'pie',
+        data: pieData,
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { 
+              display: true, 
+              position: 'bottom',
+              labels: {
+                boxWidth: 12,
+                padding: 8,
+                font: { size: 11 }
+              }
+            }
+          }
         }
-      }
-    });
+      });
+    } else {
+      // Show message if no data
+      pieCtx.parentElement.innerHTML = '<div class="alert alert-info mb-0">No appointment data for this period.</div>';
+    }
   }
   
   window.updateChart = function() {
@@ -362,6 +522,13 @@ require_once __DIR__ . '/../inc/header.php';
     const url = new URL(window.location);
     url.searchParams.set('chart_date_from', from);
     url.searchParams.set('chart_date_to', to);
+    // Preserve other filters
+    <?php if($filter_date_from): ?>url.searchParams.set('date_from', '<?= esc($filter_date_from) ?>');<?php endif; ?>
+    <?php if($filter_date_to): ?>url.searchParams.set('date_to', '<?= esc($filter_date_to) ?>');<?php endif; ?>
+    <?php if($filter_service): ?>url.searchParams.set('service', '<?= esc($filter_service) ?>');<?php endif; ?>
+    <?php if($filter_status): ?>url.searchParams.set('status', '<?= esc($filter_status) ?>');<?php endif; ?>
+    <?php if($pie_month): ?>url.searchParams.set('pie_month', '<?= esc($pie_month) ?>');<?php endif; ?>
+    <?php if($pie_year): ?>url.searchParams.set('pie_year', '<?= esc($pie_year) ?>');<?php endif; ?>
     window.location = url.toString();
   };
   
@@ -371,6 +538,13 @@ require_once __DIR__ . '/../inc/header.php';
     const url = new URL(window.location);
     url.searchParams.set('pie_month', month);
     url.searchParams.set('pie_year', year);
+    // Preserve other filters
+    <?php if($filter_date_from): ?>url.searchParams.set('date_from', '<?= esc($filter_date_from) ?>');<?php endif; ?>
+    <?php if($filter_date_to): ?>url.searchParams.set('date_to', '<?= esc($filter_date_to) ?>');<?php endif; ?>
+    <?php if($filter_service): ?>url.searchParams.set('service', '<?= esc($filter_service) ?>');<?php endif; ?>
+    <?php if($filter_status): ?>url.searchParams.set('status', '<?= esc($filter_status) ?>');<?php endif; ?>
+    <?php if($chart_date_from): ?>url.searchParams.set('chart_date_from', '<?= esc($chart_date_from) ?>');<?php endif; ?>
+    <?php if($chart_date_to): ?>url.searchParams.set('chart_date_to', '<?= esc($chart_date_to) ?>');<?php endif; ?>
     window.location = url.toString();
   };
 })();

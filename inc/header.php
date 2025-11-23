@@ -94,9 +94,55 @@ $brandColor = '#0033A0'; // GOV BLUE
   }
   .bg-primary-custom { background: var(--gov-blue) !important; }
   .text-primary-custom { color: var(--gov-blue) !important; }
+  
+  /* Splash Screen */
+  #splashScreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: var(--gov-blue);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    opacity: 1;
+    transition: opacity 0.5s ease-out;
+  }
+  
+  #splashScreen.hide {
+    opacity: 0;
+    pointer-events: none;
+  }
+  
+  #splashScreen .splash-logo {
+    max-width: 300px;
+    max-height: 300px;
+    width: auto;
+    height: auto;
+    opacity: 0;
+    animation: fadeInLogo 1s ease-in forwards;
+  }
+  
+  @keyframes fadeInLogo {
+    from {
+      opacity: 0;
+      transform: scale(0.9);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
 </style>
 </head>
 <body>
+
+<!-- Splash Screen -->
+<div id="splashScreen">
+  <img src="/elog_barangay/public/assets/images/logo.png" alt="Barangay Duangan Logo" class="splash-logo">
+</div>
 
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary-custom mb-4">
   <div class="container">

@@ -49,6 +49,43 @@ echo <<<HTML
     }
   }
 })();
+
+// Splash Screen Logic
+(function() {
+  const splashScreen = document.getElementById('splashScreen');
+  if (!splashScreen) return;
+  
+  // Check if splash screen has been shown in this session
+  const splashShown = sessionStorage.getItem('splash_shown');
+  const currentPath = window.location.pathname;
+  const isLandingPage = currentPath.includes('public/index.php') || currentPath === '/elog_barangay/public/' || currentPath === '/elog_barangay/public/index.php' || currentPath.endsWith('/elog_barangay/') || currentPath.endsWith('/elog_barangay');
+  
+  if (!splashShown) {
+    // Show splash screen on first visit in this session
+    splashScreen.style.display = 'flex';
+    
+    // After animation completes, hide splash and redirect to landing page
+    setTimeout(function() {
+      splashScreen.classList.add('hide');
+      sessionStorage.setItem('splash_shown', 'true');
+      
+      // Redirect to landing page if not already there
+      if (!isLandingPage) {
+        setTimeout(function() {
+          window.location.href = '/elog_barangay/public/index.php';
+        }, 500);
+      } else {
+        // Remove splash screen from DOM after fade out
+        setTimeout(function() {
+          splashScreen.style.display = 'none';
+        }, 500);
+      }
+    }, 2000); // Show for 2 seconds
+  } else {
+    // Hide splash screen immediately if already shown in this session
+    splashScreen.style.display = 'none';
+  }
+})();
 </script>
 </body>
 </html>

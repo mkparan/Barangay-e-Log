@@ -41,12 +41,12 @@ require_once __DIR__ . '/../inc/header.php';
 <div class="row login-layout g-4">
     <div class="col-12 col-md-6 col-lg-4">
         <div class="container-box shadow-sm h-100">
+                <br>
             <h3 class="mb-3">Citizen Login</h3>
 
             <?php foreach($errors as $e): ?>
                 <div class="alert alert-danger"><?= esc($e) ?></div>
             <?php endforeach; ?>
-
             <form method="post">
                 <div class="mb-3">
                     <label class="form-label">CIN (Citizen ID Number)</label>
