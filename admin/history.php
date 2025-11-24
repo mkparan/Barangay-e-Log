@@ -333,6 +333,7 @@ require_once __DIR__ . '/../inc/header.php';
             $badgeClass = 'bg-secondary';
             if ($status === 'completed') $badgeClass = 'bg-success';
             elseif ($status === 'declined') $badgeClass = 'bg-danger';
+            elseif ($status === 'cancelled') $badgeClass = 'bg-warning text-dark';
             elseif ($status === 'approved') $badgeClass = 'bg-info';
             elseif ($status === 'pending') $badgeClass = 'bg-warning';
           ?>

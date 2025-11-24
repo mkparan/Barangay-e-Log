@@ -32,6 +32,7 @@ if ($total_filter === 'month') {
 $pendingAppointments = (int)($db->query("SELECT COUNT(*) AS c FROM appointments WHERE status='pending'")->fetch_assoc()['c'] ?? 0);
 $completedAppointments = (int)($db->query("SELECT COUNT(*) AS c FROM appointments WHERE status='completed'")->fetch_assoc()['c'] ?? 0);
 $declinedAppointments = (int)($db->query("SELECT COUNT(*) AS c FROM appointments WHERE status='declined'")->fetch_assoc()['c'] ?? 0);
+$cancelledAppointments = (int)($db->query("SELECT COUNT(*) AS c FROM appointments WHERE status='cancelled'")->fetch_assoc()['c'] ?? 0);
 
 $today = date('Y-m-d');
 $todayScheduledStmt = $db->prepare("SELECT COUNT(*) AS c FROM appointments WHERE preferred_date = ?");
@@ -129,17 +130,31 @@ $recentStmt = $db->query("
 ");
 $recentActivity = $recentStmt ? $recentStmt->fetch_all(MYSQLI_ASSOC) : [];
 
-// Pending queue
+// Pending queue with pagination
+$pendingPage = max(1, (int)($_GET['pending_page'] ?? 1));
+$pendingPerPage = 10;
+$pendingOffset = ($pendingPage - 1) * $pendingPerPage;
+
+// Get total count
+$pendingCountStmt = $db->query("SELECT COUNT(*) AS total FROM appointments WHERE status = 'pending'");
+$pendingTotalCount = (int)($pendingCountStmt->fetch_assoc()['total'] ?? 0);
+$pendingTotalPages = max(1, ceil($pendingTotalCount / $pendingPerPage));
+
 $pendingStmt = $db->prepare("
     SELECT a.*, c.first_name, c.last_name, c.profile_picture
     FROM appointments a
     JOIN citizens c ON a.citizen_id = c.citizen_id
     WHERE a.status = 'pending'
     ORDER BY a.created_at ASC
-    LIMIT 12
+    LIMIT ? OFFSET ?
 ");
-$pendingStmt->execute();
-$pendingAppointmentsRows = $pendingStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+if ($pendingStmt) {
+    $pendingStmt->bind_param('ii', $pendingPerPage, $pendingOffset);
+    $pendingStmt->execute();
+    $pendingAppointmentsRows = $pendingStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+} else {
+    $pendingAppointmentsRows = [];
+}
 ?>
 
 <div class="container-box mb-4">
@@ -220,7 +235,7 @@ $pendingAppointmentsRows = $pendingStmt->get_result()->fetch_all(MYSQLI_ASSOC);
   <div class="col-md-6 col-xl-3">
     <div class="container-box h-100">
       <p class="text-muted text-uppercase small mb-1">Declined / cancelled</p>
-      <h3 class="mb-0"><?= number_format($declinedAppointments) ?></h3>
+      <h3 class="mb-0"><?= number_format($declinedAppointments + $cancelledAppointments) ?></h3>
       <small class="text-muted">Needs follow-up</small>
     </div>
   </div>
@@ -307,7 +322,7 @@ $pendingAppointmentsRows = $pendingStmt->get_result()->fetch_all(MYSQLI_ASSOC);
         FROM appointments a
         LEFT JOIN users u ON a.official_id = u.user_id
         JOIN citizens c ON a.citizen_id = c.citizen_id
-        WHERE (a.status IN ('completed', 'declined') OR a.preferred_date < ?)
+        WHERE (a.status IN ('completed', 'declined', 'cancelled') OR a.preferred_date < ?)
         ORDER BY a.created_at DESC
         LIMIT 10
       ");
@@ -327,6 +342,7 @@ $pendingAppointmentsRows = $pendingStmt->get_result()->fetch_all(MYSQLI_ASSOC);
             $badgeClass = 'bg-secondary';
             if ($status === 'completed') $badgeClass = 'bg-success';
             elseif ($status === 'declined') $badgeClass = 'bg-danger';
+            elseif ($status === 'cancelled') $badgeClass = 'bg-warning text-dark';
             elseif ($status === 'approved') $badgeClass = 'bg-info';
             elseif ($status === 'pending') $badgeClass = 'bg-warning';
           ?>
@@ -362,16 +378,19 @@ $pendingAppointmentsRows = $pendingStmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
   <div class="col-lg-6">
     <div class="container-box h-100">
-      <div class="d-flex justify-content-between align-items-center mb-2">
+      <div class="d-flex justify-content-between align-items-center mb-3">
         <h5 class="mb-0">Pending queue</h5>
-        <a href="appointments.php" class="btn btn-link btn-sm">View all</a>
+        <div class="d-flex align-items-center gap-2">
+          <span class="badge bg-warning text-dark"><?= number_format($pendingTotalCount) ?> pending</span>
+          <a href="appointments.php?filter=pending" class="btn btn-link btn-sm">View all</a>
+        </div>
       </div>
       <?php if(empty($pendingAppointmentsRows)): ?>
         <div class="alert alert-info mb-0">No pending appointments.</div>
       <?php else: ?>
-        <div class="table-responsive">
-          <table class="table table-sm align-middle mb-0">
-            <thead>
+        <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+          <table class="table table-sm table-hover align-middle mb-0">
+            <thead class="table-light sticky-top">
               <tr>
                 <th>Citizen</th>
                 <th>Service</th>
@@ -395,20 +414,78 @@ $pendingAppointmentsRows = $pendingStmt->get_result()->fetch_all(MYSQLI_ASSOC);
                       <span><?= esc($p['first_name'].' '.$p['last_name']) ?></span>
                     </div>
                   </td>
-                  <td><?= esc($p['service_type']) ?></td>
-                  <td><?= esc($p['preferred_date']) ?></td>
-                  <td><?= esc($p['queue_number']) ?></td>
+                  <td><small><?= esc($p['service_type']) ?></small></td>
+                  <td><small><?= esc($p['preferred_date']) ?></small></td>
+                  <td><span class="badge bg-secondary"><?= esc($p['queue_number']) ?></span></td>
                   <td class="text-end">
-                    <a href="appointments.php?action=approve&id=<?= esc($p['appointment_id']) ?>" class="btn btn-sm btn-outline-success me-1">Approve</a>
-                    <a href="appointments.php?action=decline&id=<?= esc($p['appointment_id']) ?>" class="btn btn-sm btn-outline-danger me-1">Decline</a>
-                    <a href="appointments.php?action=reschedule&id=<?= esc($p['appointment_id']) ?>" class="btn btn-sm btn-outline-warning me-1">Resched</a>
-                    <a href="appointments.php?action=complete&id=<?= esc($p['appointment_id']) ?>" class="btn btn-sm btn-success">Mark Released</a>
+                    <div class="d-flex flex-wrap gap-1 justify-content-end">
+                      <a href="appointments.php?action=approve&id=<?= esc($p['appointment_id']) ?>" class="btn btn-sm btn-success" title="Approve">Approve</a>
+                      <a href="appointments.php?action=decline&id=<?= esc($p['appointment_id']) ?>" class="btn btn-sm btn-danger" title="Decline">Decline</a>
+                      <a href="appointments.php?action=reschedule&id=<?= esc($p['appointment_id']) ?>" class="btn btn-sm btn-warning" title="Reschedule">Resched</a>
+                      <a href="appointments.php?action=complete&id=<?= esc($p['appointment_id']) ?>" class="btn btn-sm btn-outline-success" title="Mark as Released">Mark Released</a>
+                    </div>
                   </td>
                 </tr>
               <?php endforeach; ?>
             </tbody>
           </table>
         </div>
+        <?php if($pendingTotalPages > 1): ?>
+          <nav aria-label="Pending queue pagination" class="mt-3">
+            <ul class="pagination pagination-sm justify-content-center mb-0">
+              <?php if($pendingPage > 1): ?>
+                <li class="page-item">
+                  <a class="page-link" href="?pending_page=<?= $pendingPage - 1 ?><?= $total_filter ? '&total_filter=' . urlencode($total_filter) : '' ?><?= $total_filter === 'month' ? '&total_month=' . urlencode($total_month) . '&total_year=' . urlencode($total_year) : '' ?><?= $chart_filter ? '&chart_filter=' . urlencode($chart_filter) : '' ?><?= $pie_month ? '&pie_month=' . urlencode($pie_month) : '' ?><?= $pie_year ? '&pie_year=' . urlencode($pie_year) : '' ?>">Previous</a>
+                </li>
+              <?php else: ?>
+                <li class="page-item disabled">
+                  <span class="page-link">Previous</span>
+                </li>
+              <?php endif; ?>
+              
+              <?php
+              $startPage = max(1, $pendingPage - 2);
+              $endPage = min($pendingTotalPages, $pendingPage + 2);
+              
+              if ($startPage > 1): ?>
+                <li class="page-item">
+                  <a class="page-link" href="?pending_page=1<?= $total_filter ? '&total_filter=' . urlencode($total_filter) : '' ?><?= $total_filter === 'month' ? '&total_month=' . urlencode($total_month) . '&total_year=' . urlencode($total_year) : '' ?><?= $chart_filter ? '&chart_filter=' . urlencode($chart_filter) : '' ?><?= $pie_month ? '&pie_month=' . urlencode($pie_month) : '' ?><?= $pie_year ? '&pie_year=' . urlencode($pie_year) : '' ?>">1</a>
+                </li>
+                <?php if ($startPage > 2): ?>
+                  <li class="page-item disabled"><span class="page-link">...</span></li>
+                <?php endif; ?>
+              <?php endif; ?>
+              
+              <?php for($i = $startPage; $i <= $endPage; $i++): ?>
+                <li class="page-item <?= $i == $pendingPage ? 'active' : '' ?>">
+                  <a class="page-link" href="?pending_page=<?= $i ?><?= $total_filter ? '&total_filter=' . urlencode($total_filter) : '' ?><?= $total_filter === 'month' ? '&total_month=' . urlencode($total_month) . '&total_year=' . urlencode($total_year) : '' ?><?= $chart_filter ? '&chart_filter=' . urlencode($chart_filter) : '' ?><?= $pie_month ? '&pie_month=' . urlencode($pie_month) : '' ?><?= $pie_year ? '&pie_year=' . urlencode($pie_year) : '' ?>"><?= $i ?></a>
+                </li>
+              <?php endfor; ?>
+              
+              <?php if ($endPage < $pendingTotalPages): ?>
+                <?php if ($endPage < $pendingTotalPages - 1): ?>
+                  <li class="page-item disabled"><span class="page-link">...</span></li>
+                <?php endif; ?>
+                <li class="page-item">
+                  <a class="page-link" href="?pending_page=<?= $pendingTotalPages ?><?= $total_filter ? '&total_filter=' . urlencode($total_filter) : '' ?><?= $total_filter === 'month' ? '&total_month=' . urlencode($total_month) . '&total_year=' . urlencode($total_year) : '' ?><?= $chart_filter ? '&chart_filter=' . urlencode($chart_filter) : '' ?><?= $pie_month ? '&pie_month=' . urlencode($pie_month) : '' ?><?= $pie_year ? '&pie_year=' . urlencode($pie_year) : '' ?>"><?= $pendingTotalPages ?></a>
+                </li>
+              <?php endif; ?>
+              
+              <?php if($pendingPage < $pendingTotalPages): ?>
+                <li class="page-item">
+                  <a class="page-link" href="?pending_page=<?= $pendingPage + 1 ?><?= $total_filter ? '&total_filter=' . urlencode($total_filter) : '' ?><?= $total_filter === 'month' ? '&total_month=' . urlencode($total_month) . '&total_year=' . urlencode($total_year) : '' ?><?= $chart_filter ? '&chart_filter=' . urlencode($chart_filter) : '' ?><?= $pie_month ? '&pie_month=' . urlencode($pie_month) : '' ?><?= $pie_year ? '&pie_year=' . urlencode($pie_year) : '' ?>">Next</a>
+                </li>
+              <?php else: ?>
+                <li class="page-item disabled">
+                  <span class="page-link">Next</span>
+                </li>
+              <?php endif; ?>
+            </ul>
+            <div class="text-center mt-2">
+              <small class="text-muted">Showing <?= $pendingOffset + 1 ?>-<?= min($pendingOffset + $pendingPerPage, $pendingTotalCount) ?> of <?= number_format($pendingTotalCount) ?> pending</small>
+            </div>
+          </nav>
+        <?php endif; ?>
       <?php endif; ?>
     </div>
   </div>

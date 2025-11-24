@@ -129,6 +129,7 @@ require_once __DIR__ . '/../inc/header.php';
       <a href="appointments.php?filter=pending<?= $serviceFilter ? '&service=' . urlencode($serviceFilter) : '' ?>&page=1" class="btn btn-outline-warning btn-sm">Pending</a>
       <a href="appointments.php?filter=approved<?= $serviceFilter ? '&service=' . urlencode($serviceFilter) : '' ?>&page=1" class="btn btn-outline-success btn-sm">Approved</a>
       <a href="appointments.php?filter=declined<?= $serviceFilter ? '&service=' . urlencode($serviceFilter) : '' ?>&page=1" class="btn btn-outline-danger btn-sm">Declined</a>
+      <a href="appointments.php?filter=cancelled<?= $serviceFilter ? '&service=' . urlencode($serviceFilter) : '' ?>&page=1" class="btn btn-outline-warning btn-sm">Cancelled</a>
       <a href="appointments.php?filter=completed<?= $serviceFilter ? '&service=' . urlencode($serviceFilter) : '' ?>&page=1" class="btn btn-outline-secondary btn-sm">Completed</a>
     </div>
     <div class="d-flex align-items-center gap-2">
@@ -182,7 +183,16 @@ require_once __DIR__ . '/../inc/header.php';
             <td><?= esc($a['preferred_date']) ?></td>
             <td><?= esc($a['queue_number']) ?></td>
             <td>
-              <span class="badge bg-info text-dark text-uppercase"><?= esc($a['status']) ?></span>
+              <?php
+              $status = strtolower($a['status'] ?? '');
+              $badgeClass = 'bg-secondary';
+              if ($status === 'completed') $badgeClass = 'bg-success';
+              elseif ($status === 'declined') $badgeClass = 'bg-danger';
+              elseif ($status === 'cancelled') $badgeClass = 'bg-warning text-dark';
+              elseif ($status === 'approved') $badgeClass = 'bg-info text-dark';
+              elseif ($status === 'pending') $badgeClass = 'bg-warning text-dark';
+              ?>
+              <span class="badge <?= $badgeClass ?> text-uppercase"><?= esc($a['status']) ?></span>
             </td>
             <td>
               <div class="d-flex flex-wrap gap-1">

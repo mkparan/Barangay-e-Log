@@ -1,6 +1,6 @@
 <?php
-$page_title = "Appointment History - Barangay e-Log";
-require_once __DIR__ . '/../inc/header.php';
+if (session_status() === PHP_SESSION_NONE) session_start();
+
 require_once __DIR__ . '/../inc/db.php';
 require_once __DIR__ . '/../inc/functions.php';
 require_once __DIR__ . '/../inc/auth.php';
@@ -10,8 +10,51 @@ if (empty($_SESSION['citizen'])) {
     header('Location: login.php');
     exit;
 }
+
 $db = db_connect();
 $citizen = $_SESSION['citizen'];
+
+// Handle cancel appointment action FIRST, before any HTML output
+if (isset($_GET['action']) && $_GET['action'] === 'cancel' && isset($_GET['id'])) {
+    $appointmentId = (int)$_GET['id'];
+    
+    // Verify the appointment belongs to this citizen
+    $verifyStmt = $db->prepare("SELECT appointment_id, status FROM appointments WHERE appointment_id = ? AND citizen_id = ?");
+    $verifyStmt->bind_param('ii', $appointmentId, $citizen['citizen_id']);
+    $verifyStmt->execute();
+    $appointment = $verifyStmt->get_result()->fetch_assoc();
+    
+    if ($appointment) {
+        $status = strtolower($appointment['status'] ?? '');
+        // Only allow cancellation if pending or approved (not completed/declined)
+        if (in_array($status, ['pending', 'approved'])) {
+            $cancelStmt = $db->prepare("UPDATE appointments SET status = 'cancelled' WHERE appointment_id = ? AND citizen_id = ?");
+            $cancelStmt->bind_param('ii', $appointmentId, $citizen['citizen_id']);
+            if ($cancelStmt->execute()) {
+                audit_log($citizen['cin'], null, 'appointment_cancelled', 'appointments', $appointmentId);
+                $_SESSION['appointment_cancelled'] = true;
+                // Preserve filters in redirect
+                $redirectUrl = 'history.php?cancelled=1';
+                if (!empty($_GET['date_from'])) $redirectUrl .= '&date_from=' . urlencode($_GET['date_from']);
+                if (!empty($_GET['date_to'])) $redirectUrl .= '&date_to=' . urlencode($_GET['date_to']);
+                if (!empty($_GET['service'])) $redirectUrl .= '&service=' . urlencode($_GET['service']);
+                if (!empty($_GET['page'])) $redirectUrl .= '&page=' . urlencode($_GET['page']);
+                header('Location: ' . $redirectUrl);
+                exit;
+            }
+        }
+    }
+    // Preserve filters in redirect
+    $redirectUrl = 'history.php';
+    if (!empty($_GET['date_from'])) $redirectUrl .= '?date_from=' . urlencode($_GET['date_from']);
+    if (!empty($_GET['date_to'])) $redirectUrl .= '&date_to=' . urlencode($_GET['date_to']);
+    if (!empty($_GET['service'])) $redirectUrl .= '&service=' . urlencode($_GET['service']);
+    header('Location: ' . $redirectUrl);
+    exit;
+}
+
+$page_title = "Appointment History - Barangay e-Log";
+require_once __DIR__ . '/../inc/header.php';
 
 // Get filter parameters
 $filter_date_from = $_GET['date_from'] ?? '';
@@ -72,6 +115,13 @@ $appointments = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 <div class="container-box mb-4">
   <h4 class="mb-3">Appointment History</h4>
   
+  <?php if (!empty($_GET['cancelled'])): ?>
+  <div class="alert alert-info alert-dismissible fade show" role="alert">
+    Appointment cancelled successfully!
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+  </div>
+  <?php endif; ?>
+  
   <form method="get" class="row g-3 mb-4">
     <div class="col-md-3">
       <label class="form-label">Date From</label>
@@ -111,27 +161,48 @@ $appointments = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
             <th>Status</th>
             <th>Official</th>
             <th>Created</th>
+            <th>Action</th>
           </tr>
         </thead>
         <tbody>
-          <?php foreach($appointments as $a): ?>
+          <?php foreach($appointments as $a): 
+            $status = strtolower($a['status'] ?? '');
+            $badgeClass = 'bg-secondary';
+            if ($status === 'completed') $badgeClass = 'bg-success';
+            elseif ($status === 'declined') $badgeClass = 'bg-danger';
+            elseif ($status === 'cancelled') $badgeClass = 'bg-warning text-dark';
+            elseif ($status === 'approved') $badgeClass = 'bg-info';
+            elseif ($status === 'pending') $badgeClass = 'bg-warning';
+            $canCancel = in_array($status, ['pending', 'approved']);
+            
+            // Build cancel URL with filters preserved
+            $cancelUrl = '?action=cancel&id=' . esc($a['appointment_id']);
+            if ($filter_date_from) $cancelUrl .= '&date_from=' . urlencode($filter_date_from);
+            if ($filter_date_to) $cancelUrl .= '&date_to=' . urlencode($filter_date_to);
+            if ($filter_service) $cancelUrl .= '&service=' . urlencode($filter_service);
+            if ($page > 1) $cancelUrl .= '&page=' . $page;
+          ?>
             <tr>
               <td><?= esc($a['service_type']) ?></td>
               <td><?= esc($a['preferred_date']) ?></td>
-              <td><?= esc($a['queue_number']) ?></td>
+              <td><span class="badge bg-secondary"><?= esc($a['queue_number']) ?></span></td>
               <td>
-                <?php
-                $status = strtolower($a['status'] ?? '');
-                $badgeClass = 'bg-secondary';
-                if ($status === 'completed') $badgeClass = 'bg-success';
-                elseif ($status === 'declined') $badgeClass = 'bg-danger';
-                elseif ($status === 'approved') $badgeClass = 'bg-info';
-                elseif ($status === 'pending') $badgeClass = 'bg-warning';
-                ?>
                 <span class="badge <?= $badgeClass ?> text-uppercase"><?= esc($a['status']) ?></span>
               </td>
               <td><?= esc($a['official_name'] ?? 'Unassigned') ?></td>
               <td><?= esc(date('M d, Y', strtotime($a['created_at'] ?? $a['preferred_date']))) ?></td>
+              <td>
+                <?php if ($canCancel): ?>
+                  <a href="<?= $cancelUrl ?>" 
+                     class="btn btn-sm btn-outline-danger" 
+                     onclick="return confirm('Are you sure you want to cancel this appointment?');"
+                     title="Cancel Appointment">
+                    Cancel
+                  </a>
+                <?php else: ?>
+                  <small class="text-muted">-</small>
+                <?php endif; ?>
+              </td>
             </tr>
           <?php endforeach; ?>
         </tbody>
