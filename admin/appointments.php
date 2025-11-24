@@ -15,14 +15,16 @@ $id = $_GET['id'] ?? null;
 
 if ($action && $id) {
     $filter = $_GET['filter'] ?? 'all';
+    $serviceFilter = $_GET['service'] ?? '';
     $redirectFilter = $filter !== 'all' ? "&filter={$filter}" : '';
+    $redirectService = $serviceFilter ? "&service=" . urlencode($serviceFilter) : '';
     
     if ($action === 'approve') {
         $stmt = $db->prepare("UPDATE appointments SET status='approved' WHERE appointment_id=?");
         $stmt->bind_param('i', $id);
         $stmt->execute();
         audit_log($_SESSION['user']['username'], $_SESSION['user']['user_id'], 'appointment_approved', 'appointments', $id);
-        header("Location: appointments.php?msg=approved{$redirectFilter}");
+        header("Location: appointments.php?msg=approved{$redirectFilter}{$redirectService}");
         exit;
 
     } elseif ($action === 'decline') {
@@ -30,7 +32,7 @@ if ($action && $id) {
         $stmt->bind_param('i', $id);
         $stmt->execute();
         audit_log($_SESSION['user']['username'], $_SESSION['user']['user_id'], 'appointment_declined', 'appointments', $id);
-        header("Location: appointments.php?msg=declined{$redirectFilter}");
+        header("Location: appointments.php?msg=declined{$redirectFilter}{$redirectService}");
         exit;
 
     } elseif ($action === 'reschedule') {
@@ -42,13 +44,14 @@ if ($action && $id) {
         $stmt->bind_param('i', $id);
         $stmt->execute();
         audit_log($_SESSION['user']['username'], $_SESSION['user']['user_id'], 'appointment_completed', 'appointments', $id);
-        header("Location: appointments.php?msg=completed{$redirectFilter}");
+        header("Location: appointments.php?msg=completed{$redirectFilter}{$redirectService}");
         exit;
     }
 }
 
 // GET APPOINTMENTS
 $filter = $_GET['filter'] ?? 'all';
+$serviceFilter = $_GET['service'] ?? '';
 $where = "1";
 
 if ($filter === 'pending') $where = "a.status='pending'";
@@ -56,10 +59,18 @@ if ($filter === 'approved') $where = "a.status='approved'";
 if ($filter === 'declined') $where = "a.status='declined'";
 if ($filter === 'completed') $where = "a.status='completed'";
 
+if ($serviceFilter) {
+    $where .= " AND a.service_type = ?";
+}
+
 // Pagination - must be before query execution
 $page = max(1, (int)($_GET['page'] ?? 1));
 $perPage = 20;
 $offset = ($page - 1) * $perPage;
+
+// Get unique services for filter dropdown
+$servicesStmt = $db->query("SELECT DISTINCT service_type FROM appointments ORDER BY service_type");
+$availableServices = $servicesStmt ? $servicesStmt->fetch_all(MYSQLI_ASSOC) : [];
 
 // Get total count for pagination
 $countSql = "
@@ -68,19 +79,35 @@ $countSql = "
     JOIN citizens c ON a.citizen_id = c.citizen_id
     WHERE $where
 ";
-$countResult = $db->query($countSql);
-$totalCount = (int)($countResult->fetch_assoc()['total'] ?? 0);
+if ($serviceFilter) {
+    $countStmt = $db->prepare($countSql);
+    $countStmt->bind_param('s', $serviceFilter);
+    $countStmt->execute();
+    $totalCount = (int)($countStmt->get_result()->fetch_assoc()['total'] ?? 0);
+} else {
+    $countResult = $db->query($countSql);
+    $totalCount = (int)($countResult->fetch_assoc()['total'] ?? 0);
+}
 $totalPages = max(1, ceil($totalCount / $perPage));
 
-$stmt = $db->query("
+$sql = "
     SELECT a.*, c.first_name, c.last_name, c.profile_picture
     FROM appointments a
     JOIN citizens c ON a.citizen_id = c.citizen_id
     WHERE $where
     ORDER BY a.created_at DESC
     LIMIT $perPage OFFSET $offset
-");
-$appointments = $stmt->fetch_all(MYSQLI_ASSOC);
+";
+
+if ($serviceFilter) {
+    $stmt = $db->prepare($sql);
+    $stmt->bind_param('s', $serviceFilter);
+    $stmt->execute();
+    $appointments = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+} else {
+    $stmt = $db->query($sql);
+    $appointments = $stmt->fetch_all(MYSQLI_ASSOC);
+}
 
 $page_title = "Manage Appointments";
 require_once __DIR__ . '/../inc/header.php';
@@ -96,15 +123,25 @@ require_once __DIR__ . '/../inc/header.php';
   </div>
   <?php endif; ?>
 
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-      <a href="appointments.php?filter=all" class="btn btn-outline-primary btn-sm">All</a>
-      <a href="appointments.php?filter=pending" class="btn btn-outline-warning btn-sm">Pending</a>
-      <a href="appointments.php?filter=approved" class="btn btn-outline-success btn-sm">Approved</a>
-      <a href="appointments.php?filter=declined" class="btn btn-outline-danger btn-sm">Declined</a>
-      <a href="appointments.php?filter=completed" class="btn btn-outline-secondary btn-sm">Completed</a>
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div class="d-flex flex-wrap gap-2">
+      <a href="appointments.php?filter=all<?= $serviceFilter ? '&service=' . urlencode($serviceFilter) : '' ?>&page=1" class="btn btn-outline-primary btn-sm">All</a>
+      <a href="appointments.php?filter=pending<?= $serviceFilter ? '&service=' . urlencode($serviceFilter) : '' ?>&page=1" class="btn btn-outline-warning btn-sm">Pending</a>
+      <a href="appointments.php?filter=approved<?= $serviceFilter ? '&service=' . urlencode($serviceFilter) : '' ?>&page=1" class="btn btn-outline-success btn-sm">Approved</a>
+      <a href="appointments.php?filter=declined<?= $serviceFilter ? '&service=' . urlencode($serviceFilter) : '' ?>&page=1" class="btn btn-outline-danger btn-sm">Declined</a>
+      <a href="appointments.php?filter=completed<?= $serviceFilter ? '&service=' . urlencode($serviceFilter) : '' ?>&page=1" class="btn btn-outline-secondary btn-sm">Completed</a>
     </div>
-    <span class="badge bg-primary"><?= number_format($totalCount) ?> total</span>
+    <div class="d-flex align-items-center gap-2">
+      <select class="form-select form-select-sm" style="width: auto;" onchange="window.location.href='appointments.php?filter=<?= esc($filter) ?>&service=' + encodeURIComponent(this.value) + '&page=1'">
+        <option value="">All Services</option>
+        <?php foreach($availableServices as $s): ?>
+          <option value="<?= esc($s['service_type']) ?>" <?= $serviceFilter === $s['service_type'] ? 'selected' : '' ?>>
+            <?= esc($s['service_type']) ?>
+          </option>
+        <?php endforeach; ?>
+      </select>
+      <span class="badge bg-primary"><?= number_format($totalCount) ?> total</span>
+    </div>
   </div>
 
   <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
@@ -149,13 +186,19 @@ require_once __DIR__ . '/../inc/header.php';
             </td>
             <td>
               <div class="d-flex flex-wrap gap-1">
+                <?php 
+                  $actionParams = "filter=" . esc($filter);
+                  if ($serviceFilter) {
+                    $actionParams .= "&service=" . urlencode($serviceFilter);
+                  }
+                ?>
                 <?php if ($a['status'] === 'pending'): ?>
-                  <a class="btn btn-success btn-sm" href="?action=approve&id=<?= esc($a['appointment_id']) ?>&filter=<?= esc($filter) ?>">Approve</a>
-                  <a class="btn btn-warning btn-sm" href="?action=reschedule&id=<?= esc($a['appointment_id']) ?>&filter=<?= esc($filter) ?>">Reschedule</a>
-                  <a class="btn btn-danger btn-sm" href="?action=decline&id=<?= esc($a['appointment_id']) ?>&filter=<?= esc($filter) ?>">Decline</a>
-                  <a class="btn btn-outline-success btn-sm" href="?action=complete&id=<?= esc($a['appointment_id']) ?>&filter=<?= esc($filter) ?>">Mark Released</a>
+                  <a class="btn btn-success btn-sm" href="?action=approve&id=<?= esc($a['appointment_id']) ?>&<?= $actionParams ?>">Approve</a>
+                  <a class="btn btn-warning btn-sm" href="?action=reschedule&id=<?= esc($a['appointment_id']) ?>&<?= $actionParams ?>">Reschedule</a>
+                  <a class="btn btn-danger btn-sm" href="?action=decline&id=<?= esc($a['appointment_id']) ?>&<?= $actionParams ?>">Decline</a>
+                  <a class="btn btn-outline-success btn-sm" href="?action=complete&id=<?= esc($a['appointment_id']) ?>&<?= $actionParams ?>">Mark Released</a>
                 <?php elseif ($a['status'] === 'approved'): ?>
-                  <a class="btn btn-outline-success btn-sm" href="?action=complete&id=<?= esc($a['appointment_id']) ?>&filter=<?= esc($filter) ?>">Mark Released</a>
+                  <a class="btn btn-outline-success btn-sm" href="?action=complete&id=<?= esc($a['appointment_id']) ?>&<?= $actionParams ?>">Mark Released</a>
                 <?php else: ?>
                   <small class="text-muted">No actions available</small>
                 <?php endif; ?>
@@ -171,9 +214,15 @@ require_once __DIR__ . '/../inc/header.php';
   <?php if($totalPages > 1): ?>
     <nav aria-label="Page navigation" class="mt-3">
       <ul class="pagination pagination-sm justify-content-center mb-0">
+        <?php 
+          $paginationParams = "filter=" . esc($filter);
+          if ($serviceFilter) {
+            $paginationParams .= "&service=" . urlencode($serviceFilter);
+          }
+        ?>
         <?php if($page > 1): ?>
           <li class="page-item">
-            <a class="page-link" href="?filter=<?= esc($filter) ?>&page=<?= $page - 1 ?>">Previous</a>
+            <a class="page-link" href="?<?= $paginationParams ?>&page=<?= $page - 1 ?>">Previous</a>
           </li>
         <?php else: ?>
           <li class="page-item disabled">
@@ -187,7 +236,7 @@ require_once __DIR__ . '/../inc/header.php';
         
         if ($startPage > 1): ?>
           <li class="page-item">
-            <a class="page-link" href="?filter=<?= esc($filter) ?>&page=1">1</a>
+            <a class="page-link" href="?<?= $paginationParams ?>&page=1">1</a>
           </li>
           <?php if ($startPage > 2): ?>
             <li class="page-item disabled"><span class="page-link">...</span></li>
@@ -196,7 +245,7 @@ require_once __DIR__ . '/../inc/header.php';
         
         <?php for($i = $startPage; $i <= $endPage; $i++): ?>
           <li class="page-item <?= $i == $page ? 'active' : '' ?>">
-            <a class="page-link" href="?filter=<?= esc($filter) ?>&page=<?= $i ?>"><?= $i ?></a>
+            <a class="page-link" href="?<?= $paginationParams ?>&page=<?= $i ?>"><?= $i ?></a>
           </li>
         <?php endfor; ?>
         
@@ -205,13 +254,13 @@ require_once __DIR__ . '/../inc/header.php';
             <li class="page-item disabled"><span class="page-link">...</span></li>
           <?php endif; ?>
           <li class="page-item">
-            <a class="page-link" href="?filter=<?= esc($filter) ?>&page=<?= $totalPages ?>"><?= $totalPages ?></a>
+            <a class="page-link" href="?<?= $paginationParams ?>&page=<?= $totalPages ?>"><?= $totalPages ?></a>
           </li>
         <?php endif; ?>
         
         <?php if($page < $totalPages): ?>
           <li class="page-item">
-            <a class="page-link" href="?filter=<?= esc($filter) ?>&page=<?= $page + 1 ?>">Next</a>
+            <a class="page-link" href="?<?= $paginationParams ?>&page=<?= $page + 1 ?>">Next</a>
           </li>
         <?php else: ?>
           <li class="page-item disabled">
