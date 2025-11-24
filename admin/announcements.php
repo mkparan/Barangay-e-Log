@@ -26,21 +26,80 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$title || !$body) {
         $errors[] = "Title and body are required.";
     } else {
-        // Calculate expire_at based on days to display
-        $expireAt = date('Y-m-d H:i:s', strtotime("+{$daysToDisplay} days"));
+        // Handle image upload
+        $imagePath = null;
+        if (!empty($_FILES['image']['name']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+            $allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+            $maxSize = 5 * 1024 * 1024; // 5MB
+            
+            if (!in_array($_FILES['image']['type'], $allowedTypes)) {
+                $errors[] = "Invalid image type. Only JPEG, PNG, GIF, and WebP are allowed.";
+            } elseif ($_FILES['image']['size'] > $maxSize) {
+                $errors[] = "Image size exceeds 5MB limit.";
+            } else {
+                $uploadDir = __DIR__ . '/../public/assets/images/announcements/';
+                if (!is_dir($uploadDir)) {
+                    mkdir($uploadDir, 0755, true);
+                }
+                
+                $extension = pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION);
+                $filename = 'announcement_' . time() . '_' . uniqid() . '.' . $extension;
+                $targetPath = $uploadDir . $filename;
+                
+                if (move_uploaded_file($_FILES['image']['tmp_name'], $targetPath)) {
+                    $imagePath = 'assets/images/announcements/' . $filename;
+                } else {
+                    $errors[] = "Failed to upload image.";
+                }
+            }
+        }
         
-        $stmt = $db->prepare("INSERT INTO announcements (title, body, is_published, posted_by, expire_at) VALUES (?,?,?,?,?)");
-        $stmt->bind_param('ssiis', $title, $body, $publish, $_SESSION['user']['user_id'], $expireAt);
-        $stmt->execute();
-        audit_log($_SESSION['user']['username'], $_SESSION['user']['user_id'], 'announcement_created', 'announcements', $stmt->insert_id);
-        header("Location: announcements.php?msg=created");
-        exit;
+        if (empty($errors)) {
+            // Calculate expire_at based on days to display
+            $expireAt = date('Y-m-d H:i:s', strtotime("+{$daysToDisplay} days"));
+            
+            if ($imagePath) {
+                $stmt = $db->prepare("INSERT INTO announcements (title, body, image, is_published, posted_by, expire_at) VALUES (?,?,?,?,?,?)");
+                $stmt->bind_param('sssiis', $title, $body, $imagePath, $publish, $_SESSION['user']['user_id'], $expireAt);
+            } else {
+                $stmt = $db->prepare("INSERT INTO announcements (title, body, is_published, posted_by, expire_at) VALUES (?,?,?,?,?)");
+                $stmt->bind_param('ssiis', $title, $body, $publish, $_SESSION['user']['user_id'], $expireAt);
+            }
+            $stmt->execute();
+            audit_log($_SESSION['user']['username'], $_SESSION['user']['user_id'], 'announcement_created', 'announcements', $stmt->insert_id);
+            header("Location: announcements.php?msg=created");
+            exit;
+        }
     }
+}
+
+// PUBLISH HANDLER (before header output)
+if (!empty($_GET['publish'])) {
+    $pubId = (int)$_GET['publish'];
+    $stmt = $db->prepare("UPDATE announcements SET is_published=1, publish_at=CURRENT_TIMESTAMP WHERE announcement_id=?");
+    $stmt->bind_param('i', $pubId);
+    $stmt->execute();
+    audit_log($_SESSION['user']['username'], $_SESSION['user']['user_id'], 'announcement_published', 'announcements', $pubId);
+    header("Location: announcements.php?msg=published");
+    exit;
 }
 
 // DELETE HANDLER (before header output)
 if (!empty($_GET['delete'])) {
-    $del = $_GET['delete'];
+    $del = (int)$_GET['delete'];
+    // Get image path before deleting
+    $imgStmt = $db->prepare("SELECT image FROM announcements WHERE announcement_id=?");
+    $imgStmt->bind_param('i', $del);
+    $imgStmt->execute();
+    $imgResult = $imgStmt->get_result();
+    if ($imgRow = $imgResult->fetch_assoc()) {
+        if (!empty($imgRow['image'])) {
+            $imgPath = __DIR__ . '/../public/' . $imgRow['image'];
+            if (file_exists($imgPath)) {
+                unlink($imgPath);
+            }
+        }
+    }
     $db->query("DELETE FROM announcements WHERE announcement_id=$del");
     audit_log($_SESSION['user']['username'], $_SESSION['user']['user_id'], 'announcement_deleted', 'announcements', $del);
     header("Location: announcements.php?msg=deleted");
@@ -73,7 +132,7 @@ require_once __DIR__ . '/../inc/header.php';
         <div class="alert alert-danger"><?= esc($e) ?></div>
       <?php endforeach; ?>
 
-      <form method="post">
+      <form method="post" enctype="multipart/form-data">
         <div class="mb-3">
           <label class="form-label">Title <span class="text-danger">*</span></label>
           <input class="form-control" name="title" required placeholder="Enter announcement title">
@@ -81,6 +140,11 @@ require_once __DIR__ . '/../inc/header.php';
         <div class="mb-3">
           <label class="form-label">Body <span class="text-danger">*</span></label>
           <textarea class="form-control" name="body" rows="6" required placeholder="Enter announcement content"></textarea>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Image (Optional)</label>
+          <input type="file" class="form-control" name="image" accept="image/jpeg,image/jpg,image/png,image/gif,image/webp">
+          <small class="text-muted">Max size: 5MB. Supported formats: JPEG, PNG, GIF, WebP</small>
         </div>
         <div class="row g-3 mb-3">
           <div class="col-md-6">
@@ -133,6 +197,12 @@ require_once __DIR__ . '/../inc/header.php';
             }
           ?>
             <div class="list-group-item px-0 <?= $isExpired ? 'opacity-50' : '' ?>">
+              <?php if (!empty($a['image'])): ?>
+                <img src="/elog_barangay/public/<?= esc($a['image']) ?>" 
+                     alt="<?= esc($a['title']) ?>" 
+                     class="img-fluid rounded mb-2 w-100" 
+                     style="max-height: 200px; object-fit: cover;">
+              <?php endif; ?>
               <div class="d-flex justify-content-between align-items-start mb-2">
                 <div class="flex-grow-1">
                   <h6 class="mb-1"><?= esc($a['title']) ?></h6>
@@ -161,11 +231,21 @@ require_once __DIR__ . '/../inc/header.php';
                     <div class="text-muted">No expiration set</div>
                   <?php endif; ?>
                 </div>
-                <a class="btn btn-sm btn-danger" 
-                   href="announcements.php?delete=<?= $a['announcement_id'] ?>"
-                   onclick="return confirm('Delete this announcement?')">
-                   <i class="bi bi-trash"></i>
-                </a>
+                <div class="d-flex gap-1">
+                  <?php if (!$a['is_published']): ?>
+                    <a class="btn btn-sm btn-success" 
+                       href="announcements.php?publish=<?= $a['announcement_id'] ?>"
+                       title="Publish Announcement">
+                       <i class="bi bi-check-circle"></i>
+                    </a>
+                  <?php endif; ?>
+                  <a class="btn btn-sm btn-danger" 
+                     href="announcements.php?delete=<?= $a['announcement_id'] ?>"
+                     onclick="return confirm('Delete this announcement?')"
+                     title="Delete Announcement">
+                     <i class="bi bi-trash"></i>
+                  </a>
+                </div>
               </div>
             </div>
           <?php endforeach; ?>

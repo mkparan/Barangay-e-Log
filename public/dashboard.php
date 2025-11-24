@@ -15,7 +15,7 @@ if (empty($_SESSION['citizen'])) {
 $db = db_connect();
 $citizen = $_SESSION['citizen'];
 
-$annStmt = $db->query("SELECT announcement_id, title, body, publish_at FROM announcements WHERE is_published=1 AND (expire_at IS NULL OR expire_at > NOW()) ORDER BY publish_at DESC LIMIT 5");
+$annStmt = $db->query("SELECT announcement_id, title, body, image, publish_at FROM announcements WHERE is_published=1 AND (expire_at IS NULL OR expire_at > NOW()) ORDER BY publish_at DESC LIMIT 5");
 $announcements = $annStmt ? $annStmt->fetch_all(MYSQLI_ASSOC) : [];
 
 // Get current appointments
@@ -52,22 +52,74 @@ foreach ($appointments as $appt) {
 
 <div class="row g-4 mb-4">
   <div class="col-lg-8">
-    <div class="container-box">
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <h5 class="mb-0">Barangay Announcements</h5>
+    <div class="container-box border-primary border-2 d-flex flex-column" style="max-height: 700px;">
+      <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom flex-shrink-0">
+        <div>
+          <h5 class="mb-0">
+            <i class="bi bi-megaphone-fill text-primary me-2"></i>Barangay Announcements
+          </h5>
+          <small class="text-muted">Important reminders and news from the barangay</small>
+        </div>
         <span class="badge bg-primary"><?= count($announcements) ?> latest</span>
       </div>
       <?php if(empty($announcements)): ?>
         <div class="alert alert-info mb-0">No announcements at this time. Please check back later.</div>
       <?php else: ?>
-        <div class="list-group">
-          <?php foreach($announcements as $a): ?>
-            <div class="list-group-item">
-              <div class="d-flex justify-content-between align-items-center">
-                <h6 class="mb-1"><?= esc($a['title']) ?></h6>
-                <small class="text-muted"><?= esc(date('M d, Y', strtotime($a['publish_at']))) ?></small>
+        <div class="flex-grow-1" style="overflow-y: auto;">
+          <?php foreach($announcements as $a): 
+            $bodyPreview = strlen($a['body']) > 200 ? substr($a['body'], 0, 200) . '...' : $a['body'];
+          ?>
+            <div class="p-3 border-bottom">
+              <?php if (!empty($a['image'])): ?>
+                <img src="/elog_barangay/public/<?= esc($a['image']) ?>" 
+                     alt="<?= esc($a['title']) ?>" 
+                     class="img-fluid rounded mb-3 w-100" 
+                     style="max-height: 200px; object-fit: cover; cursor: pointer;"
+                     data-bs-toggle="modal"
+                     data-bs-target="#announcementModal<?= $a['announcement_id'] ?>">
+              <?php endif; ?>
+              <div class="d-flex justify-content-between align-items-start mb-2">
+                <h6 class="mb-0 fw-bold flex-grow-1"><?= esc($a['title']) ?></h6>
+                <small class="text-muted ms-2"><?= esc(date('M d, Y', strtotime($a['publish_at']))) ?></small>
               </div>
-              <p class="mb-0"><?= nl2br(esc($a['body'])) ?></p>
+              <p class="mb-2"><?= nl2br(esc($bodyPreview)) ?></p>
+              
+              <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#announcementModal<?= $a['announcement_id'] ?>">
+                <i class="bi bi-arrows-fullscreen me-1"></i>View Full Announcement
+              </button>
+              
+              <!-- Full Announcement Modal -->
+              <div class="modal fade" id="announcementModal<?= $a['announcement_id'] ?>" tabindex="-1" aria-labelledby="announcementModalLabel<?= $a['announcement_id'] ?>" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                  <div class="modal-content">
+                    <div class="modal-header">
+                      <h5 class="modal-title" id="announcementModalLabel<?= $a['announcement_id'] ?>"><?= esc($a['title']) ?></h5>
+                      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                      <div class="mb-3">
+                        <small class="text-muted">
+                          <i class="bi bi-calendar me-1"></i><?= esc(date('F d, Y', strtotime($a['publish_at']))) ?>
+                        </small>
+                      </div>
+                      <?php if (!empty($a['image'])): ?>
+                        <div class="mb-4">
+                          <img src="/elog_barangay/public/<?= esc($a['image']) ?>" 
+                               alt="<?= esc($a['title']) ?>" 
+                               class="img-fluid rounded w-100" 
+                               style="max-height: 400px; object-fit: contain;">
+                        </div>
+                      <?php endif; ?>
+                      <div class="announcement-body">
+                        <p class="mb-0" style="white-space: pre-wrap;"><?= nl2br(esc($a['body'])) ?></p>
+                      </div>
+                    </div>
+                    <div class="modal-footer">
+                      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           <?php endforeach; ?>
         </div>
