@@ -140,6 +140,11 @@ $brandColor = '#0033A0'; // GOV BLUE
       transform: scale(1);
     }
   }
+  
+  /* Ensure dropdown menus appear above sticky table headers */
+  .navbar .dropdown-menu {
+    z-index: 1030 !important;
+  }
 </style>
 </head>
 <body>

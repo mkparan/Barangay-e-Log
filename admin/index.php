@@ -266,36 +266,51 @@ if ($pendingStmt) {
     </div>
   </div>
   <div class="col-lg-4">
-    <div class="container-box h-100">
+    <div class="container-box h-100 d-flex flex-column">
       <div class="d-flex justify-content-between align-items-center mb-3">
         <h5 class="mb-0">Services by Month</h5>
       </div>
-      <div class="row g-2 mb-3">
-        <div class="col-6">
-          <label class="form-label small">Month</label>
-          <select id="pieMonth" class="form-select form-select-sm">
-            <?php for($m = 1; $m <= 12; $m++): ?>
-              <option value="<?= sprintf('%02d', $m) ?>" <?= $pie_month == sprintf('%02d', $m) ? 'selected' : '' ?>>
-                <?= date('F', mktime(0, 0, 0, $m, 1)) ?>
-              </option>
-            <?php endfor; ?>
-          </select>
-        </div>
-        <div class="col-6">
-          <label class="form-label small">Year</label>
-          <select id="pieYear" class="form-select form-select-sm">
-            <?php for($y = date('Y'); $y >= date('Y') - 5; $y--): ?>
-              <option value="<?= $y ?>" <?= $pie_year == $y ? 'selected' : '' ?>><?= $y ?></option>
-            <?php endfor; ?>
-          </select>
+      
+      <div class="mb-3">
+        <div class="row g-2 align-items-end">
+          <div class="col-5">
+            <label class="form-label small text-muted mb-1">Month</label>
+            <select id="pieMonth" class="form-select form-select-sm">
+              <?php for($m = 1; $m <= 12; $m++): ?>
+                <option value="<?= sprintf('%02d', $m) ?>" <?= $pie_month == sprintf('%02d', $m) ? 'selected' : '' ?>>
+                  <?= date('F', mktime(0, 0, 0, $m, 1)) ?>
+                </option>
+              <?php endfor; ?>
+            </select>
+          </div>
+          <div class="col-5">
+            <label class="form-label small text-muted mb-1">Year</label>
+            <select id="pieYear" class="form-select form-select-sm">
+              <?php for($y = date('Y'); $y >= date('Y') - 5; $y--): ?>
+                <option value="<?= $y ?>" <?= $pie_year == $y ? 'selected' : '' ?>><?= $y ?></option>
+              <?php endfor; ?>
+            </select>
+          </div>
+          <div class="col-2">
+            <button type="button" class="btn btn-sm btn-primary w-100" onclick="updatePieChart()" title="Update Chart">
+              <i class="bi bi-arrow-clockwise"></i>
+            </button>
+          </div>
         </div>
       </div>
-      <button type="button" class="btn btn-sm btn-primary w-100 mb-3" onclick="updatePieChart()">Update Chart</button>
+      
       <?php if(empty($pieData)): ?>
-        <div class="alert alert-info mb-0">No appointment data for this period.</div>
+        <div class="alert alert-info mb-0 flex-grow-1 d-flex align-items-center justify-content-center">
+          <div class="text-center">
+            <i class="bi bi-pie-chart fs-3 text-muted mb-2 d-block"></i>
+            <small>No appointment data for this period.</small>
+          </div>
+        </div>
       <?php else: ?>
-        <div class="ratio ratio-1x1">
-          <canvas id="pieChart"></canvas>
+        <div class="flex-grow-1 d-flex flex-column">
+          <div class="ratio ratio-1x1 mb-2">
+            <canvas id="pieChart"></canvas>
+          </div>
         </div>
       <?php endif; ?>
     </div>
