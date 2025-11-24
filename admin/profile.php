@@ -74,7 +74,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_picture']) && 
     }
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['upload_picture'])) {
+// Handle profile update (separate from password change)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['upload_picture']) && isset($_POST['update_profile'])) {
     $fullName = trim($_POST['full_name'] ?? '');
     $contact = trim($_POST['contact_number'] ?? '');
     $email = trim($_POST['email'] ?? '');
@@ -93,6 +94,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['upload_picture'])) {
             $profile = $stmt->get_result()->fetch_assoc();
         } else {
             $errors[] = "DB Error: " . $upd->error;
+        }
+    }
+}
+
+// Handle password change (separate from profile update)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['change_password'])) {
+    $currentPassword = $_POST['current_password'] ?? '';
+    $newPassword = $_POST['new_password'] ?? '';
+    $confirmPassword = $_POST['confirm_password'] ?? '';
+    
+    // First, verify current password
+    if (empty($currentPassword)) {
+        $errors[] = "Current password is required to change your password.";
+    } elseif (empty($newPassword)) {
+        $errors[] = "New password is required.";
+    } else {
+        // Get current password hash from database
+        $checkStmt = $db->prepare("SELECT password_hash FROM users WHERE user_id = ?");
+        $checkStmt->bind_param('i', $user['user_id']);
+        $checkStmt->execute();
+        $checkResult = $checkStmt->get_result();
+        
+        if ($checkRow = $checkResult->fetch_assoc()) {
+            if (!password_verify($currentPassword, $checkRow['password_hash'])) {
+                $errors[] = "Current password is incorrect.";
+            } elseif (strlen($newPassword) < 8) {
+                $errors[] = "New password must be at least 8 characters long.";
+            } elseif ($newPassword !== $confirmPassword) {
+                $errors[] = "New passwords do not match.";
+            } else {
+                // Verify new password is different from current password
+                if (password_verify($newPassword, $checkRow['password_hash'])) {
+                    $errors[] = "New password must be different from your current password.";
+                } else {
+                    $hash = password_hash($newPassword, PASSWORD_DEFAULT);
+                    $updPass = $db->prepare("UPDATE users SET password_hash=? WHERE user_id=?");
+                    $updPass->bind_param('si', $hash, $user['user_id']);
+                    if ($updPass->execute()) {
+                        audit_log($user['username'], $user['user_id'], 'password_change', 'users', $user['user_id']);
+                        $success = true;
+                        // Clear password fields on success
+                        $_POST['current_password'] = '';
+                        $_POST['new_password'] = '';
+                        $_POST['confirm_password'] = '';
+                    } else {
+                        $errors[] = "DB Error: " . $updPass->error;
+                    }
+                }
+            }
+        } else {
+            $errors[] = "Unable to verify current password. Please try again.";
         }
     }
 }
@@ -153,6 +205,7 @@ require_once __DIR__ . '/../inc/header.php';
       </div>
       
       <form method="post">
+        <input type="hidden" name="update_profile" value="1">
         <div class="row g-3">
           <div class="col-md-6">
             <label class="form-label">Username</label>
@@ -177,8 +230,51 @@ require_once __DIR__ . '/../inc/header.php';
             <input type="email" name="email" class="form-control" value="<?= esc($profile['email'] ?? '') ?>">
           </div>
         </div>
+        
         <div class="mt-4">
           <button type="submit" class="btn btn-primary">Update Profile</button>
+        </div>
+      </form>
+      
+      <hr class="my-4">
+      
+      <form method="post">
+        <input type="hidden" name="change_password" value="1">
+        <h5 class="mb-3">Change Password</h5>
+        <div class="row g-3">
+          <div class="col-md-12">
+            <label class="form-label">Current Password <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <input type="password" name="current_password" class="form-control" placeholder="Enter your current password" id="current_password" value="">
+              <button class="btn btn-outline-secondary" type="button" id="toggleCurrentPassword">
+                <i class="bi bi-eye" id="currentPasswordIcon"></i>
+              </button>
+            </div>
+            <small class="text-muted">Required to change your password</small>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">New Password <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <input type="password" name="new_password" class="form-control" placeholder="Enter new password" id="new_password" value="">
+              <button class="btn btn-outline-secondary" type="button" id="toggleNewPassword">
+                <i class="bi bi-eye" id="newPasswordIcon"></i>
+              </button>
+            </div>
+            <small class="text-muted">Minimum 8 characters</small>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Confirm New Password <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <input type="password" name="confirm_password" class="form-control" placeholder="Confirm new password" id="confirm_password" value="">
+              <button class="btn btn-outline-secondary" type="button" id="toggleConfirmPassword">
+                <i class="bi bi-eye" id="confirmPasswordIcon"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <div class="mt-4">
+          <button type="submit" class="btn btn-warning">Change Password</button>
         </div>
       </form>
     </div>
@@ -268,6 +364,32 @@ document.addEventListener('DOMContentLoaded', function() {
       uploadForm.submit();
     });
   }
+  
+  // Password toggle functionality
+  function setupPasswordToggle(toggleBtnId, passwordInputId, iconId) {
+    const toggleBtn = document.getElementById(toggleBtnId);
+    const passwordInput = document.getElementById(passwordInputId);
+    const passwordIcon = document.getElementById(iconId);
+    
+    if (toggleBtn && passwordInput && passwordIcon) {
+      toggleBtn.addEventListener('click', function() {
+        if (passwordInput.type === 'password') {
+          passwordInput.type = 'text';
+          passwordIcon.classList.remove('bi-eye');
+          passwordIcon.classList.add('bi-eye-slash');
+        } else {
+          passwordInput.type = 'password';
+          passwordIcon.classList.remove('bi-eye-slash');
+          passwordIcon.classList.add('bi-eye');
+        }
+      });
+    }
+  }
+  
+  // Setup toggles for all password fields
+  setupPasswordToggle('toggleCurrentPassword', 'current_password', 'currentPasswordIcon');
+  setupPasswordToggle('toggleNewPassword', 'new_password', 'newPasswordIcon');
+  setupPasswordToggle('toggleConfirmPassword', 'confirm_password', 'confirmPasswordIcon');
 });
 </script>
 

@@ -32,9 +32,39 @@ require_once __DIR__ . '/../inc/header.php';
   <?php foreach($errors as $e): ?><div class="alert alert-danger"><?= esc($e) ?></div><?php endforeach; ?>
   <form method="post">
     <div class="mb-3"><label class="form-label">Username</label><input name="username" class="form-control" required></div>
-    <div class="mb-3"><label class="form-label">Password</label><input name="password" type="password" class="form-control" required></div>
+    <div class="mb-3">
+      <label class="form-label">Password</label>
+      <div class="input-group">
+        <input name="password" type="password" class="form-control" id="loginPassword" required>
+        <button class="btn btn-outline-secondary" type="button" id="toggleLoginPassword">
+          <i class="bi bi-eye" id="loginPasswordIcon"></i>
+        </button>
+      </div>
+    </div>
     <div class="d-grid"><button class="btn btn-primary">Login</button></div>
   </form>
+  
+  <script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const toggleBtn = document.getElementById('toggleLoginPassword');
+    const passwordInput = document.getElementById('loginPassword');
+    const passwordIcon = document.getElementById('loginPasswordIcon');
+    
+    if (toggleBtn && passwordInput) {
+      toggleBtn.addEventListener('click', function() {
+        if (passwordInput.type === 'password') {
+          passwordInput.type = 'text';
+          passwordIcon.classList.remove('bi-eye');
+          passwordIcon.classList.add('bi-eye-slash');
+        } else {
+          passwordInput.type = 'password';
+          passwordIcon.classList.remove('bi-eye-slash');
+          passwordIcon.classList.add('bi-eye');
+        }
+      });
+    }
+  });
+  </script>
   <p class="mt-3"><a href="/elog_barangay/public/index.php">Back to public</a></p>
 </div>
 <?php require_once __DIR__ . '/../inc/footer.php'; ?>
