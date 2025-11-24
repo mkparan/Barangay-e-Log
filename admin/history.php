@@ -77,11 +77,13 @@ $sql = "
     SELECT 
         a.*,
         u.full_name AS official_name,
+        p.full_name AS processed_by_name,
         c.first_name,
         c.last_name,
         c.profile_picture
     FROM appointments a
     LEFT JOIN users u ON a.official_id = u.user_id
+    LEFT JOIN users p ON a.processed_by = p.user_id
     JOIN citizens c ON a.citizen_id = c.citizen_id
     WHERE $where
     ORDER BY a.created_at DESC
@@ -356,7 +358,12 @@ require_once __DIR__ . '/../inc/header.php';
               <td>
                 <span class="badge <?= $badgeClass ?> text-uppercase"><?= esc($a['status']) ?></span>
               </td>
-              <td><?= esc($a['official_name'] ?? 'Unassigned') ?></td>
+              <td>
+                <?= esc($a['official_name'] ?? 'Unassigned') ?>
+                <?php if (!empty($a['processed_by_name']) && $a['status'] === 'completed'): ?>
+                  <br><small class="text-muted">Processed by: <?= esc($a['processed_by_name']) ?></small>
+                <?php endif; ?>
+              </td>
               <td>
                 <small><?= esc(date('M d, Y', strtotime($a['created_at']))) ?></small><br>
                 <small class="text-muted"><?= esc(date('h:i A', strtotime($a['created_at']))) ?></small>

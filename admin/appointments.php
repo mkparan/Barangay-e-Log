@@ -20,8 +20,9 @@ if ($action && $id) {
     $redirectService = $serviceFilter ? "&service=" . urlencode($serviceFilter) : '';
     
     if ($action === 'approve') {
-        $stmt = $db->prepare("UPDATE appointments SET status='approved' WHERE appointment_id=?");
-        $stmt->bind_param('i', $id);
+        // Assign the appointment to the official who approves it
+        $stmt = $db->prepare("UPDATE appointments SET status='approved', official_id=? WHERE appointment_id=?");
+        $stmt->bind_param('ii', $_SESSION['user']['user_id'], $id);
         $stmt->execute();
         audit_log($_SESSION['user']['username'], $_SESSION['user']['user_id'], 'appointment_approved', 'appointments', $id);
         header("Location: appointments.php?msg=approved{$redirectFilter}{$redirectService}");
@@ -40,8 +41,8 @@ if ($action && $id) {
         exit;
 
     } elseif ($action === 'complete') {
-        $stmt = $db->prepare("UPDATE appointments SET status='completed' WHERE appointment_id=?");
-        $stmt->bind_param('i', $id);
+        $stmt = $db->prepare("UPDATE appointments SET status='completed', processed_by=? WHERE appointment_id=?");
+        $stmt->bind_param('ii', $_SESSION['user']['user_id'], $id);
         $stmt->execute();
         audit_log($_SESSION['user']['username'], $_SESSION['user']['user_id'], 'appointment_completed', 'appointments', $id);
         header("Location: appointments.php?msg=completed{$redirectFilter}{$redirectService}");
@@ -91,9 +92,10 @@ if ($serviceFilter) {
 $totalPages = max(1, ceil($totalCount / $perPage));
 
 $sql = "
-    SELECT a.*, c.first_name, c.last_name, c.profile_picture
+    SELECT a.*, c.first_name, c.last_name, c.profile_picture, p.full_name AS processed_by_name
     FROM appointments a
     JOIN citizens c ON a.citizen_id = c.citizen_id
+    LEFT JOIN users p ON a.processed_by = p.user_id
     WHERE $where
     ORDER BY a.created_at DESC
     LIMIT $perPage OFFSET $offset
@@ -153,15 +155,16 @@ require_once __DIR__ . '/../inc/header.php';
           <th>Citizen</th>
           <th>Service</th>
           <th>Date</th>
-          <th>Queue No.</th>
+          <th>Queue / Time</th>
           <th>Status</th>
+          <th>Processed By</th>
           <th width="200">Actions</th>
         </tr>
       </thead>
       <tbody>
         <?php if(empty($appointments)): ?>
           <tr>
-            <td colspan="7" class="text-center text-muted">No appointments found.</td>
+            <td colspan="8" class="text-center text-muted">No appointments found.</td>
           </tr>
         <?php else: ?>
           <?php foreach($appointments as $a): 
@@ -181,7 +184,12 @@ require_once __DIR__ . '/../inc/header.php';
             </td>
             <td><?= esc($a['service_type']) ?></td>
             <td><?= esc($a['preferred_date']) ?></td>
-            <td><?= esc($a['queue_number']) ?></td>
+            <td>
+              <span class="badge bg-secondary"><?= esc($a['queue_number']) ?></span>
+              <?php if (!empty($a['time_slot'])): ?>
+                <span class="badge bg-info ms-1"><?= ucfirst(esc($a['time_slot'])) ?></span>
+              <?php endif; ?>
+            </td>
             <td>
               <?php
               $status = strtolower($a['status'] ?? '');
@@ -193,6 +201,13 @@ require_once __DIR__ . '/../inc/header.php';
               elseif ($status === 'pending') $badgeClass = 'bg-warning text-dark';
               ?>
               <span class="badge <?= $badgeClass ?> text-uppercase"><?= esc($a['status']) ?></span>
+            </td>
+            <td>
+              <?php if (!empty($a['processed_by_name']) && $a['status'] === 'completed'): ?>
+                <small><?= esc($a['processed_by_name']) ?></small>
+              <?php else: ?>
+                <small class="text-muted">—</small>
+              <?php endif; ?>
             </td>
             <td>
               <div class="d-flex flex-wrap gap-1">

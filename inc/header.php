@@ -231,9 +231,12 @@ $brandColor = '#0033A0'; // GOV BLUE
             </a>
             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="adminMenu">
               <li><a class="dropdown-item" href="/elog_barangay/admin/appointments.php"><i class="bi bi-calendar-check me-2"></i>Manage Appointments</a></li>
+              <li><a class="dropdown-item" href="/elog_barangay/admin/appointment_availability.php"><i class="bi bi-calendar-event me-2"></i>Appointment Availability</a></li>
               <li><a class="dropdown-item" href="/elog_barangay/admin/announcements.php"><i class="bi bi-megaphone me-2"></i>Citizen Announcements</a></li>
-              <li><a class="dropdown-item" href="/elog_barangay/admin/duty_roster.php"><i class="bi bi-calendar-week me-2"></i>Duty Roster</a></li>
-              <li><a class="dropdown-item" href="/elog_barangay/admin/presence.php"><i class="bi bi-clock-history me-2"></i>Presence</a></li>
+              <?php if (!empty($_SESSION['user']) && $_SESSION['user']['role'] === 'admin'): ?>
+              <li><a class="dropdown-item" href="/elog_barangay/admin/officials.php"><i class="bi bi-people me-2"></i>Manage Officials</a></li>
+              <?php endif; ?>
+              <li><a class="dropdown-item" href="/elog_barangay/admin/check_in.php"><i class="bi bi-clock-history me-2"></i>Official Check-In</a></li>
               <li><a class="dropdown-item" href="/elog_barangay/admin/history.php"><i class="bi bi-journal-text me-2"></i>Appointment History</a></li>
               <li><hr class="dropdown-divider"></li>
               <li><a class="dropdown-item" href="/elog_barangay/admin/profile.php"><i class="bi bi-person-circle me-2"></i>Profile</a></li>

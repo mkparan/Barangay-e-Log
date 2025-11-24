@@ -47,12 +47,11 @@ $errors = [];
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $service = $_POST['service_type'] ?? '';
     $preferred_date = $_POST['preferred_date'] ?? null;
-    $preferred_start = $_POST['preferred_start'] ?? null;
-    $preferred_end = $_POST['preferred_end'] ?? null;
+    $time_slot = $_POST['time_slot'] ?? null;
     $details = $_POST['details'] ?? '';
 
-    if (!$service || !$preferred_date) {
-        $_SESSION['appointment_errors'] = ["Service and preferred date are required."];
+    if (!$service || !$preferred_date || !$time_slot) {
+        $_SESSION['appointment_errors'] = ["Service, date, and time slot (morning/afternoon) are required."];
         header('Location: create_appointment.php');
         exit;
     }
@@ -65,32 +64,66 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
     
-    if ($service && $preferred_date >= $today) {
-        $stmt2 = $db->prepare("SELECT dr.official_id FROM duty_roster dr WHERE dr.duty_date = ? AND dr.start_time <= ? AND dr.end_time >= ? LIMIT 1");
-        $start = $preferred_start ?: '00:00:00';
-        $end = $preferred_end ?: '23:59:59';
-        $stmt2->bind_param('sss', $preferred_date, $start, $end);
-        $stmt2->execute();
-        $res2 = $stmt2->get_result();
-        $official_id = null;
-        if ($row = $res2->fetch_assoc()) $official_id = $row['official_id'];
+    // Check if date is available
+    $availStmt = $db->prepare("SELECT * FROM appointment_availability WHERE available_date = ? AND is_available = 1");
+    $availStmt->bind_param('s', $preferred_date);
+    $availStmt->execute();
+    $availability = $availStmt->get_result()->fetch_assoc();
+    
+    if (!$availability) {
+        $_SESSION['appointment_errors'] = ["Selected date is not available for appointments."];
+        header('Location: create_appointment.php');
+        exit;
+    }
+    
+    // Check if selected time slot is available
+    if ($time_slot === 'morning' && !$availability['morning_available']) {
+        $_SESSION['appointment_errors'] = ["Morning slot is not available for this date."];
+        header('Location: create_appointment.php');
+        exit;
+    }
+    
+    if ($time_slot === 'afternoon' && !$availability['afternoon_available']) {
+        $_SESSION['appointment_errors'] = ["Afternoon slot is not available for this date."];
+        header('Location: create_appointment.php');
+        exit;
+    }
+    
+    // Count existing appointments for this date and time slot
+    $countStmt = $db->prepare("SELECT COUNT(*) as count FROM appointments WHERE preferred_date = ? AND time_slot = ? AND status NOT IN ('declined', 'cancelled')");
+    $countStmt->bind_param('ss', $preferred_date, $time_slot);
+    $countStmt->execute();
+    $countResult = $countStmt->get_result()->fetch_assoc();
+    $currentCount = (int)($countResult['count'] ?? 0);
+    
+    // Check if slots are full
+    $maxSlots = $time_slot === 'morning' ? $availability['morning_slots'] : $availability['afternoon_slots'];
+    if ($currentCount >= $maxSlots) {
+        $_SESSION['appointment_errors'] = ["All slots for " . ucfirst($time_slot) . " on this date are full. Please choose another time or date."];
+        header('Location: create_appointment.php');
+        exit;
+    }
+    
+    // Set time based on slot
+    $preferred_start = $time_slot === 'morning' ? '08:00:00' : '13:00:00';
+    $preferred_end = $time_slot === 'morning' ? '12:00:00' : '17:00:00';
+    
+    // Get queue number for this date and time slot
+    $qStmt = $db->prepare("SELECT COALESCE(MAX(queue_number),0)+1 AS qnum FROM appointments WHERE preferred_date = ? AND time_slot = ?");
+    $qStmt->bind_param('ss', $preferred_date, $time_slot);
+    $qStmt->execute();
+    $qnum = $qStmt->get_result()->fetch_assoc()['qnum'] ?? 1;
 
-        $qStmt = $db->prepare("SELECT COALESCE(MAX(queue_number),0)+1 AS qnum FROM appointments WHERE preferred_date = ?");
-        $qStmt->bind_param('s', $preferred_date);
-        $qStmt->execute();
-        $qnum = $qStmt->get_result()->fetch_assoc()['qnum'] ?? 1;
-
-        $ins = $db->prepare("INSERT INTO appointments (citizen_id, official_id, service_type, details, preferred_date, preferred_start, preferred_end, queue_number) VALUES (?,?,?,?,?,?,?,?)");
-        $ins->bind_param('iisssssi', $citizen['citizen_id'], $official_id, $service, $details, $preferred_date, $preferred_start, $preferred_end, $qnum);
-        if ($ins->execute()) {
-            audit_log($citizen['cin'], null, 'appointment_create', 'appointments', $ins->insert_id);
-            header('Location: create_appointment.php?created=1');
-            exit;
-        } else {
-            $_SESSION['appointment_errors'] = ["DB Error: " . $ins->error];
-            header('Location: create_appointment.php');
-            exit;
-        }
+    $ins = $db->prepare("INSERT INTO appointments (citizen_id, service_type, details, preferred_date, preferred_start, preferred_end, time_slot, queue_number) VALUES (?,?,?,?,?,?,?,?)");
+    $ins->bind_param('issssssi', $citizen['citizen_id'], $service, $details, $preferred_date, $preferred_start, $preferred_end, $time_slot, $qnum);
+    if ($ins->execute()) {
+        audit_log($citizen['cin'], null, 'appointment_create', 'appointments', $ins->insert_id);
+        header('Location: create_appointment.php?created=1');
+        exit;
+    } else {
+        $_SESSION['appointment_errors'] = ["DB Error: " . $ins->error];
+        header('Location: create_appointment.php');
+        exit;
     }
 }
 
@@ -166,7 +199,22 @@ $service_requirements = [
     ]
 ];
 
-$stmt = $db->prepare("SELECT a.* , u.full_name AS official_name FROM appointments a LEFT JOIN users u ON a.official_id = u.user_id WHERE a.citizen_id = ? ORDER BY a.created_at DESC");
+// Get available dates (all future dates, not just 30 days)
+$availableDatesStmt = $db->query("
+    SELECT available_date, morning_available, afternoon_available, morning_slots, afternoon_slots, is_available,
+           (SELECT COUNT(*) FROM appointments WHERE preferred_date = appointment_availability.available_date AND time_slot = 'morning' AND status NOT IN ('declined', 'cancelled')) as morning_booked,
+           (SELECT COUNT(*) FROM appointments WHERE preferred_date = appointment_availability.available_date AND time_slot = 'afternoon' AND status NOT IN ('declined', 'cancelled')) as afternoon_booked
+    FROM appointment_availability 
+    WHERE available_date >= CURDATE()
+    ORDER BY available_date ASC
+");
+$availableDates = $availableDatesStmt ? $availableDatesStmt->fetch_all(MYSQLI_ASSOC) : [];
+$availableDatesArray = [];
+foreach ($availableDates as $av) {
+    $availableDatesArray[$av['available_date']] = $av;
+}
+
+$stmt = $db->prepare("SELECT a.* , u.full_name AS official_name, p.full_name AS processed_by_name FROM appointments a LEFT JOIN users u ON a.official_id = u.user_id LEFT JOIN users p ON a.processed_by = p.user_id WHERE a.citizen_id = ? ORDER BY a.created_at DESC");
 $stmt->bind_param('i', $citizen['citizen_id']);
 $stmt->execute();
 $appointments = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
@@ -220,18 +268,46 @@ foreach ($appointments as $appt) {
           <ul class="mb-2" id="requirementsList"></ul>
           <p class="mb-0 small text-muted">Have these ready when you arrive at the barangay office.</p>
         </div>
-        <div class="row g-2 mb-3">
-          <div class="col-6">
-            <label class="form-label">Preferred date</label>
-            <input type="date" name="preferred_date" class="form-control" min="<?= date('Y-m-d') ?>" required>
-          </div>
-          <div class="col-3">
-            <label class="form-label">Start</label>
-            <input type="time" name="preferred_start" class="form-control">
-          </div>
-          <div class="col-3">
-            <label class="form-label">End</label>
-            <input type="time" name="preferred_end" class="form-control">
+        <div class="mb-3">
+          <label class="form-label">Preferred Date <span class="text-danger">*</span></label>
+          <input type="text" name="preferred_date" id="preferred_date" class="form-control" placeholder="Select a date" required readonly>
+          <small class="text-muted d-block mt-1">
+            <i class="bi bi-info-circle me-1"></i>
+            Only dates with availability set by admin can be selected. 
+            <?php if (count($availableDatesArray) > 0): ?>
+              <span id="availableDatesCount"><?= count($availableDatesArray) ?> available date(s) set.</span>
+            <?php else: ?>
+              <span class="text-warning">No dates available. Please contact the barangay office.</span>
+            <?php endif; ?>
+          </small>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Time Slot <span class="text-danger">*</span></label>
+          <div class="row g-2">
+            <div class="col-6">
+              <div class="card border h-100 time-slot-option" data-slot="morning" style="cursor: pointer;">
+                <div class="card-body text-center">
+                  <input type="radio" name="time_slot" value="morning" id="time_morning" class="form-check-input" required>
+                  <label for="time_morning" class="form-check-label w-100" style="cursor: pointer;">
+                    <strong class="d-block">Morning</strong>
+                    <small class="text-muted">8:00 AM - 12:00 PM</small>
+                    <div class="mt-2" id="morning_slots_info"></div>
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="card border h-100 time-slot-option" data-slot="afternoon" style="cursor: pointer;">
+                <div class="card-body text-center">
+                  <input type="radio" name="time_slot" value="afternoon" id="time_afternoon" class="form-check-input" required>
+                  <label for="time_afternoon" class="form-check-label w-100" style="cursor: pointer;">
+                    <strong class="d-block">Afternoon</strong>
+                    <small class="text-muted">1:00 PM - 5:00 PM</small>
+                    <div class="mt-2" id="afternoon_slots_info"></div>
+                  </label>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
         <div class="mb-3">
@@ -257,9 +333,9 @@ foreach ($appointments as $appt) {
               <tr>
                 <th>Service</th>
                 <th>Date</th>
-                <th>Queue</th>
+                <th>Queue / Time</th>
                 <th>Status</th>
-                <th>Official</th>
+                <th>Official / Processed By</th>
                 <th>Action</th>
               </tr>
             </thead>
@@ -277,9 +353,19 @@ foreach ($appointments as $appt) {
                 <tr>
                   <td><?= esc($a['service_type']) ?></td>
                   <td><?= esc($a['preferred_date']) ?></td>
-                  <td><span class="badge bg-secondary"><?= esc($a['queue_number']) ?></span></td>
+                  <td>
+                    <span class="badge bg-secondary"><?= esc($a['queue_number']) ?></span>
+                    <?php if (!empty($a['time_slot'])): ?>
+                      <span class="badge bg-info ms-1"><?= ucfirst(esc($a['time_slot'])) ?></span>
+                    <?php endif; ?>
+                  </td>
                   <td><span class="badge <?= $badgeClass ?> text-uppercase"><?= esc($a['status']) ?></span></td>
-                  <td><?= esc($a['official_name'] ?? 'Unassigned') ?></td>
+                  <td>
+                    <?= esc($a['official_name'] ?? 'Unassigned') ?>
+                    <?php if (!empty($a['processed_by_name']) && $a['status'] === 'completed'): ?>
+                      <br><small class="text-muted">Processed by: <?= esc($a['processed_by_name']) ?></small>
+                    <?php endif; ?>
+                  </td>
                   <td>
                     <?php if ($canCancel): ?>
                       <a href="?action=cancel&id=<?= esc($a['appointment_id']) ?>" 
@@ -301,6 +387,12 @@ foreach ($appointments as $appt) {
     </div>
   </div>
 </div>
+
+<!-- Flatpickr CSS -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+
+<!-- Flatpickr JS -->
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -332,6 +424,165 @@ document.addEventListener('DOMContentLoaded', function() {
 
   serviceSelect.addEventListener('change', renderRequirements);
   renderRequirements();
+  
+  // Available dates data
+  var availableDates = <?= json_encode($availableDatesArray, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
+  var dateInput = document.getElementById('preferred_date');
+  var morningRadio = document.getElementById('time_morning');
+  var afternoonRadio = document.getElementById('time_afternoon');
+  var morningInfo = document.getElementById('morning_slots_info');
+  var afternoonInfo = document.getElementById('afternoon_slots_info');
+  var timeSlotOptions = document.querySelectorAll('.time-slot-option');
+  
+  // Get array of available date strings (only dates with is_available = 1)
+  var availableDateStrings = [];
+  var disabledDates = [];
+  
+  Object.keys(availableDates).forEach(function(date) {
+    var dateInfo = availableDates[date];
+    // Only include dates that are available (is_available = 1)
+    if (dateInfo.is_available == 1 || dateInfo.is_available == '1') {
+      availableDateStrings.push(date);
+    } else {
+      disabledDates.push(date);
+    }
+  });
+  
+  // Initialize Flatpickr with enabled dates only
+  if (availableDateStrings.length > 0) {
+    var sortedDates = availableDateStrings.sort();
+    var minDate = sortedDates[0];
+    var maxDate = sortedDates[sortedDates.length - 1];
+    
+    flatpickr(dateInput, {
+      dateFormat: "Y-m-d",
+      minDate: minDate,
+      maxDate: maxDate,
+      enable: availableDateStrings, // Only enable these specific dates
+      disableMobile: false,
+      onChange: function(selectedDates, dateStr, instance) {
+        if (dateStr) {
+          dateInput.value = dateStr; // Ensure the value is set
+          updateTimeSlots();
+        }
+      }
+    });
+  } else {
+    // If no dates available, still initialize but disable all
+    flatpickr(dateInput, {
+      dateFormat: "Y-m-d",
+      disable: true
+    });
+  }
+  
+  function updateTimeSlots() {
+    var selectedDate = dateInput.value;
+    if (!selectedDate || !availableDates[selectedDate]) {
+      morningRadio.disabled = true;
+      afternoonRadio.disabled = true;
+      morningInfo.innerHTML = '<small class="text-danger">Date not available</small>';
+      afternoonInfo.innerHTML = '<small class="text-danger">Date not available</small>';
+      timeSlotOptions.forEach(function(opt) {
+        opt.classList.remove('border-primary');
+        opt.classList.add('opacity-50');
+      });
+      return;
+    }
+    
+    var dateInfo = availableDates[selectedDate];
+    
+    // Check if date is explicitly disabled
+    if (dateInfo.is_available == 0 || dateInfo.is_available == '0') {
+      morningRadio.disabled = true;
+      afternoonRadio.disabled = true;
+      morningInfo.innerHTML = '<small class="text-danger">Date disabled</small>';
+      afternoonInfo.innerHTML = '<small class="text-danger">Date disabled</small>';
+      timeSlotOptions.forEach(function(opt) {
+        opt.classList.remove('border-primary');
+        opt.classList.add('opacity-50');
+      });
+      return;
+    }
+    
+    // Morning slot
+    if (dateInfo.morning_available == 1 || dateInfo.morning_available == '1') {
+      morningRadio.disabled = false;
+      var morningAvailable = dateInfo.morning_slots - dateInfo.morning_booked;
+      morningInfo.innerHTML = '<small class="text-success">' + morningAvailable + ' slots available</small>';
+      document.querySelector('[data-slot="morning"]').classList.remove('opacity-50');
+      document.querySelector('[data-slot="morning"]').classList.add('border-primary');
+    } else {
+      morningRadio.disabled = true;
+      morningInfo.innerHTML = '<small class="text-danger">Not available</small>';
+      document.querySelector('[data-slot="morning"]').classList.add('opacity-50');
+      document.querySelector('[data-slot="morning"]').classList.remove('border-primary');
+    }
+    
+    // Afternoon slot
+    if (dateInfo.afternoon_available == 1 || dateInfo.afternoon_available == '1') {
+      afternoonRadio.disabled = false;
+      var afternoonAvailable = dateInfo.afternoon_slots - dateInfo.afternoon_booked;
+      afternoonInfo.innerHTML = '<small class="text-success">' + afternoonAvailable + ' slots available</small>';
+      document.querySelector('[data-slot="afternoon"]').classList.remove('opacity-50');
+      document.querySelector('[data-slot="afternoon"]').classList.add('border-primary');
+    } else {
+      afternoonRadio.disabled = true;
+      afternoonInfo.innerHTML = '<small class="text-danger">Not available</small>';
+      document.querySelector('[data-slot="afternoon"]').classList.add('opacity-50');
+      document.querySelector('[data-slot="afternoon"]').classList.remove('border-primary');
+    }
+  }
+  
+  // Flatpickr handles the date selection, so we just need to update time slots on change
+  // The onChange callback in flatpickr initialization will call updateTimeSlots()
+  
+  // Make time slot cards clickable
+  timeSlotOptions.forEach(function(option) {
+    option.addEventListener('click', function() {
+      var slot = this.getAttribute('data-slot');
+      var radio = document.getElementById('time_' + slot);
+      if (!radio.disabled) {
+        radio.checked = true;
+      }
+    });
+  });
+  
+  // Form validation before submit
+  var form = document.querySelector('form');
+  if (form) {
+    form.addEventListener('submit', function(e) {
+      var selectedDate = dateInput.value;
+      if (!selectedDate) {
+        e.preventDefault();
+        alert('Please select a date.');
+        return false;
+      }
+      
+      if (!availableDates[selectedDate]) {
+        e.preventDefault();
+        alert('Selected date is not available. Please choose an available date.');
+        dateInput.focus();
+        return false;
+      }
+      
+      if (availableDates[selectedDate].is_available == 0) {
+        e.preventDefault();
+        alert('Selected date has been disabled. Please choose another date.');
+        dateInput.focus();
+        return false;
+      }
+      
+      var selectedTimeSlot = document.querySelector('input[name="time_slot"]:checked');
+      if (!selectedTimeSlot || selectedTimeSlot.disabled) {
+        e.preventDefault();
+        alert('Please select a valid time slot (morning or afternoon).');
+        return false;
+      }
+    });
+  }
+  
+  // Initial update
+  updateTimeSlots();
 });
 </script>
 

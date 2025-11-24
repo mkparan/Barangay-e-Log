@@ -103,7 +103,7 @@ $servicesStmt->bind_param('i', $citizen['citizen_id']);
 $servicesStmt->execute();
 $availableServices = $servicesStmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
-$sql = "SELECT a.*, u.full_name AS official_name FROM appointments a LEFT JOIN users u ON a.official_id = u.user_id WHERE $where ORDER BY a.created_at DESC LIMIT ? OFFSET ?";
+$sql = "SELECT a.*, u.full_name AS official_name, p.full_name AS processed_by_name FROM appointments a LEFT JOIN users u ON a.official_id = u.user_id LEFT JOIN users p ON a.processed_by = p.user_id WHERE $where ORDER BY a.created_at DESC LIMIT ? OFFSET ?";
 $stmt = $db->prepare($sql);
 $bindTypes = $types . 'ii';
 $bindParams = array_merge($params, [$perPage, $offset]);
@@ -189,7 +189,12 @@ $appointments = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
               <td>
                 <span class="badge <?= $badgeClass ?> text-uppercase"><?= esc($a['status']) ?></span>
               </td>
-              <td><?= esc($a['official_name'] ?? 'Unassigned') ?></td>
+              <td>
+                <?= esc($a['official_name'] ?? 'Unassigned') ?>
+                <?php if (!empty($a['processed_by_name']) && $a['status'] === 'completed'): ?>
+                  <br><small class="text-muted">Processed by: <?= esc($a['processed_by_name']) ?></small>
+                <?php endif; ?>
+              </td>
               <td><?= esc(date('M d, Y', strtotime($a['created_at'] ?? $a['preferred_date']))) ?></td>
               <td>
                 <?php if ($canCancel): ?>
