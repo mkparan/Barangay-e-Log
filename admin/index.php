@@ -46,6 +46,132 @@ $processedThisMonthStmt->bind_param('s', $startOfMonth);
 $processedThisMonthStmt->execute();
 $processedThisMonth = (int)($processedThisMonthStmt->get_result()->fetch_assoc()['c'] ?? 0);
 
+// 1. Official Performance Metrics
+$officialPerformanceStmt = $db->query("
+    SELECT 
+        u.user_id,
+        u.full_name,
+        u.role,
+        COUNT(a.appointment_id) as total_processed,
+        AVG(TIMESTAMPDIFF(HOUR, a.created_at, a.updated_at)) as avg_processing_hours
+    FROM users u
+    LEFT JOIN appointments a ON u.user_id = a.processed_by AND a.status = 'completed'
+    WHERE u.role != 'admin' AND u.is_active = 1
+    GROUP BY u.user_id, u.full_name, u.role
+    ORDER BY total_processed DESC
+    LIMIT 5
+");
+$officialPerformance = $officialPerformanceStmt ? $officialPerformanceStmt->fetch_all(MYSQLI_ASSOC) : [];
+
+// 4. Average Processing Time (overall)
+$avgProcessingTimeStmt = $db->query("
+    SELECT 
+        AVG(TIMESTAMPDIFF(HOUR, created_at, updated_at)) as avg_hours,
+        AVG(TIMESTAMPDIFF(DAY, created_at, updated_at)) as avg_days
+    FROM appointments 
+    WHERE status = 'completed' AND updated_at IS NOT NULL
+");
+$avgProcessingTime = $avgProcessingTimeStmt ? $avgProcessingTimeStmt->fetch_assoc() : ['avg_hours' => 0, 'avg_days' => 0];
+$avgHours = round($avgProcessingTime['avg_hours'] ?? 0, 1);
+$avgDays = round($avgProcessingTime['avg_days'] ?? 0, 1);
+
+// 5. Comparison Charts - Month-over-month and Year-over-year
+$currentMonth = date('Y-m');
+$lastMonth = date('Y-m', strtotime('-1 month'));
+$currentYear = date('Y');
+$lastYear = $currentYear - 1;
+
+// Current month vs last month
+$currentMonthCount = (int)($db->query("SELECT COUNT(*) AS c FROM appointments WHERE DATE_FORMAT(created_at, '%Y-%m') = '$currentMonth'")->fetch_assoc()['c'] ?? 0);
+$lastMonthCount = (int)($db->query("SELECT COUNT(*) AS c FROM appointments WHERE DATE_FORMAT(created_at, '%Y-%m') = '$lastMonth'")->fetch_assoc()['c'] ?? 0);
+$monthChange = $lastMonthCount > 0 ? round((($currentMonthCount - $lastMonthCount) / $lastMonthCount) * 100, 1) : 0;
+
+// Current year vs last year
+$currentYearCount = (int)($db->query("SELECT COUNT(*) AS c FROM appointments WHERE YEAR(created_at) = $currentYear")->fetch_assoc()['c'] ?? 0);
+$lastYearCount = (int)($db->query("SELECT COUNT(*) AS c FROM appointments WHERE YEAR(created_at) = $lastYear")->fetch_assoc()['c'] ?? 0);
+$yearChange = $lastYearCount > 0 ? round((($currentYearCount - $lastYearCount) / $lastYearCount) * 100, 1) : 0;
+
+// 9. Dashboard Widgets - Today's summary, upcoming appointments, alerts
+$todayStart = date('Y-m-d 00:00:00');
+$todayEnd = date('Y-m-d 23:59:59');
+
+// Today's appointments
+$todayAppointmentsStmt = $db->prepare("
+    SELECT COUNT(*) AS c FROM appointments 
+    WHERE DATE(created_at) = CURDATE()
+");
+$todayAppointmentsStmt->execute();
+$todayAppointmentsCount = (int)($todayAppointmentsStmt->get_result()->fetch_assoc()['c'] ?? 0);
+
+// Today's completed
+$todayCompletedStmt = $db->prepare("
+    SELECT COUNT(*) AS c FROM appointments 
+    WHERE status = 'completed' AND DATE(updated_at) = CURDATE()
+");
+$todayCompletedStmt->execute();
+$todayCompletedCount = (int)($todayCompletedStmt->get_result()->fetch_assoc()['c'] ?? 0);
+
+// Upcoming appointments (next 7 days)
+$nextWeek = date('Y-m-d', strtotime('+7 days'));
+$upcomingStmt = $db->prepare("
+    SELECT COUNT(*) AS c FROM appointments 
+    WHERE preferred_date >= CURDATE() AND preferred_date <= ? AND status IN ('pending', 'approved')
+");
+$upcomingStmt->bind_param('s', $nextWeek);
+$upcomingStmt->execute();
+$upcomingCount = (int)($upcomingStmt->get_result()->fetch_assoc()['c'] ?? 0);
+
+// Upcoming appointments details
+$upcomingDetailsStmt = $db->prepare("
+    SELECT a.*, c.first_name, c.last_name, c.profile_picture
+    FROM appointments a
+    JOIN citizens c ON a.citizen_id = c.citizen_id
+    WHERE a.preferred_date >= CURDATE() AND a.preferred_date <= ? AND a.status IN ('pending', 'approved')
+    ORDER BY a.preferred_date ASC, a.queue_number ASC
+    LIMIT 5
+");
+$upcomingDetailsStmt->bind_param('s', $nextWeek);
+$upcomingDetailsStmt->execute();
+$upcomingAppointments = $upcomingDetailsStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
+// Alerts - High pending count, overdue appointments
+$highPendingThreshold = 20;
+$alerts = [];
+
+if ($pendingAppointments > $highPendingThreshold) {
+    $alerts[] = [
+        'type' => 'warning',
+        'icon' => 'exclamation-triangle',
+        'message' => "High pending count: {$pendingAppointments} appointments need attention",
+        'action' => 'appointments.php?filter=pending'
+    ];
+}
+
+// Check for appointments pending for more than 3 days
+$overdueStmt = $db->query("
+    SELECT COUNT(*) AS c FROM appointments 
+    WHERE status = 'pending' AND DATEDIFF(CURDATE(), DATE(created_at)) > 3
+");
+$overdueCount = (int)($overdueStmt->fetch_assoc()['c'] ?? 0);
+if ($overdueCount > 0) {
+    $alerts[] = [
+        'type' => 'danger',
+        'icon' => 'clock-history',
+        'message' => "{$overdueCount} appointment(s) pending for more than 3 days",
+        'action' => 'appointments.php?filter=pending'
+    ];
+}
+
+// Check for appointments scheduled today
+if ($todayScheduled > 0) {
+    $alerts[] = [
+        'type' => 'info',
+        'icon' => 'calendar-check',
+        'message' => "{$todayScheduled} appointment(s) scheduled for today",
+        'action' => 'appointments.php?filter=approved'
+    ];
+}
+
 // Monthly chart data with filter
 $monthKeys = [];
 $chartLabels = [];
@@ -240,6 +366,69 @@ if ($pendingStmt) {
     </div>
   </div>
 </div>
+
+<!-- 9. Dashboard Widgets: Today's Summary & Alerts -->
+<div class="row g-4 mb-4">
+  <div class="col-md-6 col-lg-3">
+    <div class="container-box h-100 border-start border-4 border-primary">
+      <p class="text-muted text-uppercase small mb-1">Today's Activity</p>
+      <h4 class="mb-0"><?= number_format($todayAppointmentsCount) ?></h4>
+      <small class="text-muted"><?= $todayCompletedCount ?> completed today</small>
+    </div>
+  </div>
+  <div class="col-md-6 col-lg-3">
+    <div class="container-box h-100 border-start border-4 border-info">
+      <p class="text-muted text-uppercase small mb-1">Upcoming (7 days)</p>
+      <h4 class="mb-0"><?= number_format($upcomingCount) ?></h4>
+      <small class="text-muted">Appointments scheduled</small>
+    </div>
+  </div>
+  <div class="col-md-6 col-lg-3">
+    <div class="container-box h-100 border-start border-4 border-success">
+      <p class="text-muted text-uppercase small mb-1">Avg Processing Time</p>
+      <h4 class="mb-0">
+        <?php if ($avgDays >= 1): ?>
+          <?= number_format($avgDays, 1) ?> day(s)
+        <?php else: ?>
+          <?= number_format($avgHours, 1) ?> hour(s)
+        <?php endif; ?>
+      </h4>
+      <small class="text-muted">From creation to completion</small>
+    </div>
+  </div>
+  <div class="col-md-6 col-lg-3">
+    <div class="container-box h-100 border-start border-4 border-warning">
+      <p class="text-muted text-uppercase small mb-1">Month-over-Month</p>
+      <h4 class="mb-0 <?= $monthChange >= 0 ? 'text-success' : 'text-danger' ?>">
+        <?= $monthChange >= 0 ? '+' : '' ?><?= number_format($monthChange, 1) ?>%
+      </h4>
+      <small class="text-muted">vs last month</small>
+    </div>
+  </div>
+</div>
+
+<?php if (!empty($alerts)): ?>
+<div class="row g-4 mb-4">
+  <div class="col-12">
+    <div class="container-box">
+      <h6 class="mb-3"><i class="bi bi-bell me-2"></i>Alerts & Notifications</h6>
+      <div class="row g-2">
+        <?php foreach($alerts as $alert): ?>
+          <div class="col-md-6 col-lg-4">
+            <div class="alert alert-<?= esc($alert['type']) ?> alert-dismissible fade show mb-0" role="alert">
+              <i class="bi bi-<?= esc($alert['icon']) ?> me-2"></i>
+              <small><?= esc($alert['message']) ?></small>
+              <?php if (!empty($alert['action'])): ?>
+                <a href="<?= esc($alert['action']) ?>" class="alert-link ms-2">View</a>
+              <?php endif; ?>
+            </div>
+          </div>
+        <?php endforeach; ?>
+      </div>
+    </div>
+  </div>
+</div>
+<?php endif; ?>
 
 <div class="row g-4 mb-4">
   <div class="col-lg-8">
@@ -507,6 +696,33 @@ if ($pendingStmt) {
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<style>
+/* 10. Mobile-Responsive Analytics */
+@media (max-width: 768px) {
+  .container-box {
+    padding: 15px;
+  }
+  .ratio-16x9 {
+    --bs-aspect-ratio: 75%;
+  }
+  .ratio-1x1 {
+    --bs-aspect-ratio: 100%;
+  }
+  h4, h5 {
+    font-size: 1.1rem;
+  }
+  .list-group-item {
+    font-size: 0.9rem;
+  }
+  .table {
+    font-size: 0.85rem;
+  }
+  .btn-sm {
+    padding: 0.2rem 0.4rem;
+    font-size: 0.75rem;
+  }
+}
+</style>
 <script>
 (function() {
   const chartPayload = <?= json_encode($chartPayload, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
