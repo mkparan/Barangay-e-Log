@@ -14,6 +14,11 @@ if (empty($_SESSION['citizen'])) {
 $db = db_connect();
 $citizen = $_SESSION['citizen'];
 
+// Ensure is_verified is set in session (updated by require_citizen)
+if (!isset($citizen['is_verified'])) {
+    $citizen['is_verified'] = false;
+}
+
 // Handle cancel appointment action
 if (isset($_GET['action']) && $_GET['action'] === 'cancel' && isset($_GET['id'])) {
     $appointmentId = (int)$_GET['id'];
@@ -45,6 +50,13 @@ if (isset($_GET['action']) && $_GET['action'] === 'cancel' && isset($_GET['id'])
 // Handle POST request FIRST, before any HTML output
 $errors = [];
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Check if citizen is verified
+    if (empty($citizen['is_verified']) || !$citizen['is_verified']) {
+        $_SESSION['appointment_errors'] = ["Your account is not verified. Please contact the barangay office to verify your account before booking appointments."];
+        header('Location: create_appointment.php');
+        exit;
+    }
+    
     $service = $_POST['service_type'] ?? '';
     $preferred_date = $_POST['preferred_date'] ?? null;
     $time_slot = $_POST['time_slot'] ?? null;
@@ -238,6 +250,24 @@ foreach ($appointments as $appt) {
 </div>
 <?php endif; ?>
 
+<!-- 5. Persistent Notification Banner for Unverified Accounts -->
+<?php if (empty($citizen['is_verified']) || !$citizen['is_verified']): ?>
+<div class="container-box mb-4 border-warning border-3 bg-warning bg-opacity-10">
+  <div class="d-flex align-items-start">
+    <div class="flex-grow-1">
+      <h5 class="text-warning mb-2">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>Account Not Verified
+      </h5>
+      <p class="mb-2">Your account is pending verification. You cannot book appointments until your account is verified by barangay officials.</p>
+      <p class="mb-0 text-muted">
+        <strong>What to do:</strong> Please visit the barangay hall with a valid ID to verify your account. 
+        Once verified, you will be able to book appointments and access all features.
+      </p>
+    </div>
+  </div>
+</div>
+<?php endif; ?>
+
 <?php if (!empty($_GET['cancelled'])): ?>
 <div class="alert alert-info alert-dismissible fade show" role="alert">
   Appointment cancelled successfully!
@@ -249,11 +279,19 @@ foreach ($appointments as $appt) {
   <div class="col-lg-6">
     <div class="container-box h-100">
       <h4 class="mb-3">Create Appointment</h4>
+      <?php if (empty($citizen['is_verified']) || !$citizen['is_verified']): ?>
+        <div class="alert alert-warning mb-3">
+          <i class="bi bi-exclamation-triangle-fill me-2"></i>
+          <strong>Account Not Verified:</strong> You cannot create appointments until your account is verified by barangay officials. 
+          Please visit the barangay hall to verify your account.
+        </div>
+      <?php endif; ?>
       <?php foreach($errors as $e): ?><div class="alert alert-danger"><?= esc($e) ?></div><?php endforeach; ?>
-      <form method="post">
+      <?php $formDisabled = (empty($citizen['is_verified']) || !$citizen['is_verified']); ?>
+      <form method="post" <?= $formDisabled ? 'onsubmit="event.preventDefault(); alert(\'Your account must be verified before you can book appointments. Please visit the barangay hall.\'); return false;"' : '' ?>>
         <div class="mb-3">
           <label class="form-label">Service</label>
-          <select name="service_type" class="form-select" required>
+          <select name="service_type" class="form-select" required <?= $formDisabled ? 'disabled' : '' ?>>
             <option value="">-- choose --</option>
             <?php foreach($services as $s): ?>
               <option value="<?= esc($s) ?>"><?= esc($s) ?></option>
@@ -270,7 +308,7 @@ foreach ($appointments as $appt) {
         </div>
         <div class="mb-3">
           <label class="form-label">Preferred Date <span class="text-danger">*</span></label>
-          <input type="text" name="preferred_date" id="preferred_date" class="form-control" placeholder="Select a date" required readonly>
+          <input type="text" name="preferred_date" id="preferred_date" class="form-control" placeholder="Select a date" required readonly <?= (empty($citizen['is_verified']) || !$citizen['is_verified']) ? 'disabled' : '' ?>>
           <small class="text-muted d-block mt-1">
             <i class="bi bi-info-circle me-1"></i>
             Only dates with availability set by admin can be selected. 
@@ -287,7 +325,7 @@ foreach ($appointments as $appt) {
             <div class="col-6">
               <div class="card border h-100 time-slot-option" data-slot="morning" style="cursor: pointer;">
                 <div class="card-body text-center">
-                  <input type="radio" name="time_slot" value="morning" id="time_morning" class="form-check-input" required>
+                  <input type="radio" name="time_slot" value="morning" id="time_morning" class="form-check-input" required <?= $formDisabled ? 'disabled' : '' ?>>
                   <label for="time_morning" class="form-check-label w-100" style="cursor: pointer;">
                     <strong class="d-block">Morning</strong>
                     <small class="text-muted">8:00 AM - 12:00 PM</small>
@@ -299,7 +337,7 @@ foreach ($appointments as $appt) {
             <div class="col-6">
               <div class="card border h-100 time-slot-option" data-slot="afternoon" style="cursor: pointer;">
                 <div class="card-body text-center">
-                  <input type="radio" name="time_slot" value="afternoon" id="time_afternoon" class="form-check-input" required>
+                  <input type="radio" name="time_slot" value="afternoon" id="time_afternoon" class="form-check-input" required <?= $formDisabled ? 'disabled' : '' ?>>
                   <label for="time_afternoon" class="form-check-label w-100" style="cursor: pointer;">
                     <strong class="d-block">Afternoon</strong>
                     <small class="text-muted">1:00 PM - 5:00 PM</small>
@@ -312,10 +350,16 @@ foreach ($appointments as $appt) {
         </div>
         <div class="mb-3">
           <label class="form-label">Details (optional)</label>
-          <textarea name="details" class="form-control" rows="3" placeholder="Any additional information to help us prepare"></textarea>
+          <textarea name="details" class="form-control" rows="3" placeholder="Any additional information to help us prepare" <?= $formDisabled ? 'disabled' : '' ?>></textarea>
         </div>
         <div class="d-grid">
-          <button class="btn btn-primary">Book Appointment</button>
+          <?php if ($formDisabled): ?>
+            <button type="button" class="btn btn-primary" disabled title="Account must be verified to book appointments">
+              <i class="bi bi-lock me-2"></i>Book Appointment (Verification Required)
+            </button>
+          <?php else: ?>
+            <button type="submit" class="btn btn-primary">Book Appointment</button>
+          <?php endif; ?>
         </div>
       </form>
     </div>

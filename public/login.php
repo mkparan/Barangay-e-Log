@@ -14,21 +14,27 @@ $errors = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $cin = trim($_POST['cin'] ?? '');
-    $stmt = $db->prepare("SELECT citizen_id, cin, first_name, last_name FROM citizens WHERE cin = ? LIMIT 1");
+    $stmt = $db->prepare("SELECT citizen_id, cin, first_name, last_name, is_active, is_verified FROM citizens WHERE cin = ? LIMIT 1");
     $stmt->bind_param('s', $cin);
     $stmt->execute();
     $res = $stmt->get_result();
     if ($row = $res->fetch_assoc()) {
-        $_SESSION['citizen'] = [
-            'citizen_id' => $row['citizen_id'],
-            'cin' => $row['cin'],
-            'name' => $row['first_name'] . ' ' . $row['last_name']
-        ];
-        audit_log($row['cin'], null, 'citizen_login', 'citizens', $row['citizen_id']);
-        header('Location: dashboard.php');
-        exit;
+        // Check if account is banned
+        if (!$row['is_active']) {
+            $errors[] = "Your account has been banned. Please contact the barangay office.";
+        } else {
+            $_SESSION['citizen'] = [
+                'citizen_id' => $row['citizen_id'],
+                'cin' => $row['cin'],
+                'name' => $row['first_name'] . ' ' . $row['last_name'],
+                'is_verified' => (bool)$row['is_verified']
+            ];
+            audit_log($row['cin'], null, 'citizen_login', 'citizens', $row['citizen_id']);
+            header('Location: dashboard.php');
+            exit;
+        }
     } else {
-        $errors[] = "CIN not found. Please register.";
+        $errors[] = "Barangay ID not found. Please register.";
     }
 }
 
@@ -49,8 +55,8 @@ require_once __DIR__ . '/../inc/header.php';
             <?php endforeach; ?>
             <form method="post">
                 <div class="mb-3">
-                    <label class="form-label">CIN (Citizen ID Number)</label>
-                    <input type="text" class="form-control" name="cin" required>
+                    <label class="form-label">Barangay ID</label>
+                    <input type="text" class="form-control" name="cin" required placeholder="Enter your Barangay ID">
                 </div>
 
                 <button class="btn btn-primary w-100">Login</button>

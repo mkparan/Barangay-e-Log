@@ -15,6 +15,11 @@ if (empty($_SESSION['citizen'])) {
 $db = db_connect();
 $citizen = $_SESSION['citizen'];
 
+// Ensure is_verified is set in session (updated by require_citizen)
+if (!isset($citizen['is_verified'])) {
+    $citizen['is_verified'] = false;
+}
+
 $annStmt = $db->query("SELECT announcement_id, title, body, image, publish_at FROM announcements WHERE is_published=1 AND (expire_at IS NULL OR expire_at > NOW()) ORDER BY publish_at DESC LIMIT 5");
 $announcements = $annStmt ? $annStmt->fetch_all(MYSQLI_ASSOC) : [];
 
@@ -36,6 +41,24 @@ foreach ($appointments as $appt) {
 }
 ?>
 
+<!-- 5. Persistent Notification Banner for Unverified Accounts -->
+<?php if (empty($citizen['is_verified']) || !$citizen['is_verified']): ?>
+<div class="container-box mb-4 border-warning border-3 bg-warning bg-opacity-10">
+  <div class="d-flex align-items-start">
+    <div class="flex-grow-1">
+      <h5 class="text-warning mb-2">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>Account Not Verified
+      </h5>
+      <p class="mb-2">Your account is pending verification. You cannot book appointments until your account is verified by barangay officials.</p>
+      <p class="mb-0 text-muted">
+        <strong>What to do:</strong> Please visit the barangay hall with a valid ID to verify your account. 
+        Once verified, you will be able to book appointments and access all features.
+      </p>
+    </div>
+  </div>
+</div>
+<?php endif; ?>
+
 <div class="container-box mb-4">
   <div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3">
     <div>
@@ -43,9 +66,15 @@ foreach ($appointments as $appt) {
       <p class="text-muted mb-0">Stay updated with barangay announcements, view your appointments, and manage your services.</p>
     </div>
     <div>
-      <a href="create_appointment.php" class="btn btn-primary">
-        <i class="bi bi-calendar-plus me-2"></i>Create Appointment
-      </a>
+      <?php if (!empty($citizen['is_verified']) && $citizen['is_verified']): ?>
+        <a href="create_appointment.php" class="btn btn-primary">
+          <i class="bi bi-calendar-plus me-2"></i>Create Appointment
+        </a>
+      <?php else: ?>
+        <button class="btn btn-primary" disabled title="Account must be verified to book appointments">
+          <i class="bi bi-calendar-plus me-2"></i>Create Appointment
+        </button>
+      <?php endif; ?>
     </div>
   </div>
 </div>

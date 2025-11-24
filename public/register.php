@@ -17,15 +17,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $first = trim($_POST['first_name'] ?? '');
     $last = trim($_POST['last_name'] ?? '');
     if (!$cin || !$first || !$last) {
-        $errors[] = "CIN, first and last name are required.";
+        $errors[] = "Barangay ID, first and last name are required.";
     } else {
         $stmt = $db->prepare("SELECT citizen_id FROM citizens WHERE cin = ?");
         $stmt->bind_param('s', $cin);
         $stmt->execute();
         if ($stmt->get_result()->num_rows > 0) {
-            $errors[] = "CIN already registered.";
+            $errors[] = "Barangay ID already registered.";
         } else {
-            $stmt = $db->prepare("INSERT INTO citizens (cin, first_name, middle_name, last_name, birth_date, gender, contact_number, email, address, gov_affiliations) VALUES (?,?,?,?,?,?,?,?,?,?)");
+            $stmt = $db->prepare("INSERT INTO citizens (cin, first_name, middle_name, last_name, birth_date, gender, contact_number, email, address, gov_affiliations, is_verified) VALUES (?,?,?,?,?,?,?,?,?,?,0)");
             $birth = !empty($_POST['birth_date']) ? $_POST['birth_date'] : null;
             $middle = trim($_POST['middle_name'] ?? '');
             $gender = trim($_POST['gender'] ?? '');
@@ -57,8 +57,9 @@ require_once __DIR__ . '/../inc/header.php';
 
   <form method="post" novalidate>
     <div class="mb-3">
-      <label class="form-label">CIN</label>
-      <input class="form-control" name="cin" required>
+      <label class="form-label">Barangay ID <span class="text-danger">*</span></label>
+      <input class="form-control" name="cin" required placeholder="Enter your Barangay ID">
+      <small class="text-muted">Your account will need to be verified by barangay officials before you can book appointments.</small>
     </div>
     <div class="row">
       <div class="col-md-6 mb-3">

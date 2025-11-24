@@ -160,9 +160,9 @@ require_once __DIR__ . '/../inc/header.php';
       <form method="post">
         <div class="row g-3">
           <div class="col-md-4">
-            <label class="form-label">CIN (Citizen ID Number)</label>
+            <label class="form-label">Barangay ID</label>
             <input type="text" class="form-control" value="<?= esc($profile['cin']) ?>" disabled>
-            <small class="text-muted">CIN cannot be changed</small>
+            <small class="text-muted">Barangay ID cannot be changed</small>
           </div>
           <div class="col-md-4">
             <label class="form-label">First Name <span class="text-danger">*</span></label>
@@ -229,7 +229,7 @@ require_once __DIR__ . '/../inc/header.php';
     <div class="container-box">
       <h5 class="mb-3">Account Summary</h5>
       <dl class="row">
-        <dt class="col-sm-5">CIN:</dt>
+        <dt class="col-sm-5">Barangay ID:</dt>
         <dd class="col-sm-7"><?= esc($profile['cin']) ?></dd>
         
         <dt class="col-sm-5">Full Name:</dt>

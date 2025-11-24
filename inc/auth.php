@@ -87,6 +87,23 @@ function require_citizen() {
         header('Location: /elog_barangay/public/login.php?err=auth');
         exit;
     }
+    
+    // Refresh citizen data to get latest verification status
+    $db = db_connect();
+    $stmt = $db->prepare("SELECT citizen_id, cin, first_name, last_name, is_active, is_verified FROM citizens WHERE citizen_id = ? LIMIT 1");
+    $stmt->bind_param('i', $_SESSION['citizen']['citizen_id']);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    if ($row = $res->fetch_assoc()) {
+        // Check if account is banned
+        if (!$row['is_active']) {
+            unset($_SESSION['citizen']);
+            header('Location: /elog_barangay/public/login.php?err=banned');
+            exit;
+        }
+        // Update session with latest verification status
+        $_SESSION['citizen']['is_verified'] = (bool)$row['is_verified'];
+    }
 }
 
 

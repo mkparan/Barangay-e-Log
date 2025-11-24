@@ -2,6 +2,16 @@
 if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/functions.php';
 $brandColor = '#0033A0'; // GOV BLUE
+
+// Detect current page for active nav highlighting
+$currentPage = basename($_SERVER['PHP_SELF']);
+$currentPath = $_SERVER['PHP_SELF'];
+$isHome = ($currentPage === 'index.php' && strpos($currentPath, '/public/') !== false);
+$isRegister = ($currentPage === 'register.php' && strpos($currentPath, '/public/') !== false);
+$isLogin = ($currentPage === 'login.php' && strpos($currentPath, '/public/') !== false);
+$isDashboard = ($currentPage === 'dashboard.php' && strpos($currentPath, '/public/') !== false);
+$isAdminLogin = ($currentPage === 'login.php' && strpos($currentPath, '/admin/') !== false);
+$isAdminDashboard = ($currentPage === 'index.php' && strpos($currentPath, '/admin/') !== false);
 ?>
 <!doctype html>
 <html lang="en" data-bs-theme="light">
@@ -25,6 +35,11 @@ $brandColor = '#0033A0'; // GOV BLUE
   body { background-color: #f4f6f9; }
   [data-bs-theme="dark"] body { background-color: #1a1a1a; }
   .navbar-brand { font-weight: 600; letter-spacing: .2px; }
+  .nav-link.active { 
+    color: #fff !important; 
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
   .container-box {
     background: #fff;
     padding: 22px;
@@ -166,7 +181,7 @@ $brandColor = '#0033A0'; // GOV BLUE
 
     <div class="collapse navbar-collapse" id="navMenu">
       <ul class="navbar-nav ms-auto align-items-center">
-        <li class="nav-item"><a class="nav-link" href="/elog_barangay/public/index.php">Home</a></li>
+        <li class="nav-item"><a class="nav-link <?= $isHome ? 'active fw-bold' : '' ?>" href="/elog_barangay/public/index.php">Home</a></li>
         <?php if (!empty($_SESSION['citizen'])): 
           // Get profile picture
           $citizenPic = null;
@@ -185,7 +200,7 @@ $brandColor = '#0033A0'; // GOV BLUE
           }
           $defaultPic = 'data:image/svg+xml;base64,' . base64_encode('<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#dee2e6"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="18" fill="#6c757d">' . strtoupper(substr($_SESSION['citizen']['name'] ?? 'U', 0, 1)) . '</text></svg>');
         ?>
-          <li class="nav-item"><a class="nav-link" href="/elog_barangay/public/dashboard.php">Dashboard</a></li>
+          <li class="nav-item"><a class="nav-link <?= $isDashboard ? 'active fw-bold' : '' ?>" href="/elog_barangay/public/dashboard.php">Dashboard</a></li>
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="citizenMenu" role="button" data-bs-toggle="dropdown" aria-expanded="false">
               <img src="<?= $citizenPic ? esc('/elog_barangay/public/' . $citizenPic) : $defaultPic ?>" 
@@ -220,7 +235,7 @@ $brandColor = '#0033A0'; // GOV BLUE
           }
           $defaultPic = 'data:image/svg+xml;base64,' . base64_encode('<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#dee2e6"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="18" fill="#6c757d">' . strtoupper(substr($_SESSION['user']['full_name'] ?? 'U', 0, 1)) . '</text></svg>');
         ?>
-          <li class="nav-item"><a class="nav-link" href="/elog_barangay/admin/index.php">Dashboard</a></li>
+          <li class="nav-item"><a class="nav-link <?= $isAdminDashboard ? 'active fw-bold' : '' ?>" href="/elog_barangay/admin/index.php">Dashboard</a></li>
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="adminMenu" role="button" data-bs-toggle="dropdown" aria-expanded="false">
               <img src="<?= $adminPic ? esc('/elog_barangay/public/' . $adminPic) : $defaultPic ?>" 
@@ -233,6 +248,7 @@ $brandColor = '#0033A0'; // GOV BLUE
               <li><a class="dropdown-item" href="/elog_barangay/admin/appointments.php"><i class="bi bi-calendar-check me-2"></i>Manage Appointments</a></li>
               <li><a class="dropdown-item" href="/elog_barangay/admin/appointment_availability.php"><i class="bi bi-calendar-event me-2"></i>Appointment Availability</a></li>
               <li><a class="dropdown-item" href="/elog_barangay/admin/announcements.php"><i class="bi bi-megaphone me-2"></i>Citizen Announcements</a></li>
+              <li><a class="dropdown-item" href="/elog_barangay/admin/citizens.php"><i class="bi bi-people-fill me-2"></i>Manage Citizens</a></li>
               <?php if (!empty($_SESSION['user']) && $_SESSION['user']['role'] === 'admin'): ?>
               <li><a class="dropdown-item" href="/elog_barangay/admin/officials.php"><i class="bi bi-people me-2"></i>Manage Officials</a></li>
               <?php endif; ?>
@@ -244,9 +260,9 @@ $brandColor = '#0033A0'; // GOV BLUE
             </ul>
           </li>
         <?php else: ?>
-          <li class="nav-item"><a class="nav-link" href="/elog_barangay/public/register.php">Register as Citizen</a></li>
-          <li class="nav-item"><a class="nav-link" href="/elog_barangay/public/login.php">Citizen Login</a></li>
-          <li class="nav-item"><a class="nav-link" href="/elog_barangay/admin/login.php">Official / Admin Login</a></li>
+          <li class="nav-item"><a class="nav-link <?= $isRegister ? 'active fw-bold' : '' ?>" href="/elog_barangay/public/register.php">Register</a></li>
+          <li class="nav-item"><a class="nav-link <?= $isLogin ? 'active fw-bold' : '' ?>" href="/elog_barangay/public/login.php">Login</a></li>
+          <li class="nav-item"><a class="nav-link <?= $isAdminLogin ? 'active fw-bold' : '' ?>" href="/elog_barangay/admin/login.php">Official / Admin Login</a></li>
         <?php endif; ?>
         <li class="nav-item ms-2">
           <button class="btn btn-sm btn-outline-light" type="button" id="themeToggle" title="Toggle dark mode">
