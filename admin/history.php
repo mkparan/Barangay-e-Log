@@ -14,6 +14,7 @@ $filter_date_from = $_GET['date_from'] ?? '';
 $filter_date_to = $_GET['date_to'] ?? '';
 $filter_service = $_GET['service'] ?? '';
 $filter_status = $_GET['status'] ?? '';
+$search_barangay_id = trim($_GET['search_barangay_id'] ?? '');
 
 // Build query with filters
 $where = "1";
@@ -44,6 +45,12 @@ if ($filter_status) {
     $types .= 's';
 }
 
+if ($search_barangay_id) {
+    $where .= " AND c.cin LIKE ?";
+    $params[] = "%{$search_barangay_id}%";
+    $types .= 's';
+}
+
 // Pagination - must be before query execution
 $page = max(1, (int)($_GET['page'] ?? 1));
 $perPage = 20;
@@ -57,12 +64,23 @@ $countSql = "
     JOIN citizens c ON a.citizen_id = c.citizen_id
     WHERE $where
 ";
-$countStmt = $db->prepare($countSql);
+
+// Execute count query with same parameters
 if (!empty($params)) {
-    $countStmt->bind_param($types, ...$params);
+    $countStmt = $db->prepare($countSql);
+    if ($countStmt) {
+        $countStmt->bind_param($types, ...$params);
+        $countStmt->execute();
+        $countResult = $countStmt->get_result();
+        $totalCount = (int)($countResult->fetch_assoc()['total'] ?? 0);
+        $countStmt->close();
+    } else {
+        $totalCount = 0;
+    }
+} else {
+    $countResult = $db->query($countSql);
+    $totalCount = (int)($countResult->fetch_assoc()['total'] ?? 0);
 }
-$countStmt->execute();
-$totalCount = (int)($countStmt->get_result()->fetch_assoc()['total'] ?? 0);
 $totalPages = max(1, ceil($totalCount / $perPage));
 
 // Get unique services for filter dropdown
@@ -80,6 +98,7 @@ $sql = "
         p.full_name AS processed_by_name,
         c.first_name,
         c.last_name,
+        c.cin,
         c.profile_picture
     FROM appointments a
     LEFT JOIN users u ON a.official_id = u.user_id
@@ -90,16 +109,30 @@ $sql = "
     LIMIT ? OFFSET ?
 ";
 
-$stmt = $db->prepare($sql);
+// Execute main query
 if (!empty($params)) {
-    $bindTypes = $types . 'ii';
-    $bindParams = array_merge($params, [$perPage, $offset]);
-    $stmt->bind_param($bindTypes, ...$bindParams);
+    $stmt = $db->prepare($sql);
+    if ($stmt) {
+        $bindTypes = $types . 'ii';
+        $bindParams = array_merge($params, [$perPage, $offset]);
+        $stmt->bind_param($bindTypes, ...$bindParams);
+        $stmt->execute();
+        $appointments = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+    } else {
+        $appointments = [];
+    }
 } else {
-    $stmt->bind_param('ii', $perPage, $offset);
+    $stmt = $db->prepare($sql);
+    if ($stmt) {
+        $stmt->bind_param('ii', $perPage, $offset);
+        $stmt->execute();
+        $appointments = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+    } else {
+        $appointments = [];
+    }
 }
-$stmt->execute();
-$appointments = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
 // Chart filters
 $chart_date_from = $_GET['chart_date_from'] ?? date('Y-m-01', strtotime('-11 months'));
@@ -206,6 +239,39 @@ require_once __DIR__ . '/../inc/header.php';
   <h4 class="mb-3">Appointment History</h4>
   <p class="text-muted mb-4">View all appointment records and transactions. This serves as the barangay's official appointment log.</p>
   
+  <!-- Separate form for Barangay ID search -->
+  <form method="get" action="history.php" class="mb-3">
+    <div class="card bg-primary text-white">
+      <div class="card-body">
+        <div class="row g-3 align-items-end">
+          <div class="col-md-10">
+            <label class="form-label text-white fw-bold mb-2">
+              <i class="bi bi-search me-2"></i>Search by Barangay ID
+            </label>
+            <input type="text" 
+                   name="search_barangay_id" 
+                   class="form-control" 
+                   placeholder="Enter Barangay ID to search appointment history..." 
+                   value="<?= esc($search_barangay_id) ?>"
+                   autofocus>
+          </div>
+          <div class="col-md-2">
+            <button type="submit" class="btn btn-light w-100">
+              <i class="bi bi-search"></i> Search
+            </button>
+          </div>
+        </div>
+        <?php if ($search_barangay_id): ?>
+          <div class="mt-2">
+            <a href="history.php?<?= $filter_date_from ? 'date_from='.urlencode($filter_date_from).'&' : '' ?><?= $filter_date_to ? 'date_to='.urlencode($filter_date_to).'&' : '' ?><?= $filter_service ? 'service='.urlencode($filter_service).'&' : '' ?><?= $filter_status ? 'status='.urlencode($filter_status) : '' ?>" class="btn btn-sm btn-outline-light">
+              <i class="bi bi-x"></i> Clear Search
+            </a>
+          </div>
+        <?php endif; ?>
+      </div>
+    </div>
+  </form>
+  
   <form method="get" class="row g-3 mb-4">
     <div class="col-md-3">
       <label class="form-label">Date From</label>
@@ -238,10 +304,20 @@ require_once __DIR__ . '/../inc/header.php';
       </select>
     </div>
     <div class="col-md-12">
+      <?php if ($search_barangay_id): ?>
+        <input type="hidden" name="search_barangay_id" value="<?= esc($search_barangay_id) ?>">
+      <?php endif; ?>
       <button type="submit" class="btn btn-primary me-2">Filter</button>
-      <a href="history.php" class="btn btn-outline-secondary">Clear Filters</a>
+      <a href="history.php<?= $search_barangay_id ? '?search_barangay_id='.urlencode($search_barangay_id) : '' ?>" class="btn btn-outline-secondary">Clear Date/Service Filters</a>
     </div>
   </form>
+  
+  <?php if ($search_barangay_id): ?>
+    <div class="alert alert-info alert-dismissible fade show mb-3">
+      <i class="bi bi-info-circle"></i> Showing appointment history for Barangay ID: <strong><?= esc($search_barangay_id) ?></strong>
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+  <?php endif; ?>
 
   <div class="row g-4 mb-4">
     <div class="col-lg-4">
@@ -318,6 +394,7 @@ require_once __DIR__ . '/../inc/header.php';
           <tr>
             <th>ID</th>
             <th>Citizen</th>
+            <th>Barangay ID</th>
             <th>Service</th>
             <th>Date</th>
             <th>Queue</th>
@@ -352,6 +429,7 @@ require_once __DIR__ . '/../inc/header.php';
                   </div>
                 </div>
               </td>
+              <td><strong><?= esc($a['cin']) ?></strong></td>
               <td><?= esc($a['service_type']) ?></td>
               <td><?= esc($a['preferred_date']) ?></td>
               <td><?= esc($a['queue_number']) ?></td>
@@ -379,7 +457,7 @@ require_once __DIR__ . '/../inc/header.php';
               <ul class="pagination pagination-sm justify-content-center mb-0">
                 <?php if($page > 1): ?>
                   <li class="page-item">
-                    <a class="page-link" href="?page=<?= $page - 1 ?><?= $filter_date_from ? '&date_from='.urlencode($filter_date_from) : '' ?><?= $filter_date_to ? '&date_to='.urlencode($filter_date_to) : '' ?><?= $filter_service ? '&service='.urlencode($filter_service) : '' ?><?= $filter_status ? '&status='.urlencode($filter_status) : '' ?><?= $chart_date_from ? '&chart_date_from='.urlencode($chart_date_from) : '' ?><?= $chart_date_to ? '&chart_date_to='.urlencode($chart_date_to) : '' ?><?= $pie_month ? '&pie_month='.urlencode($pie_month) : '' ?><?= $pie_year ? '&pie_year='.urlencode($pie_year) : '' ?>">Previous</a>
+                    <a class="page-link" href="?page=<?= $page - 1 ?><?= $filter_date_from ? '&date_from='.urlencode($filter_date_from) : '' ?><?= $filter_date_to ? '&date_to='.urlencode($filter_date_to) : '' ?><?= $filter_service ? '&service='.urlencode($filter_service) : '' ?><?= $filter_status ? '&status='.urlencode($filter_status) : '' ?><?= $search_barangay_id ? '&search_barangay_id='.urlencode($search_barangay_id) : '' ?><?= $chart_date_from ? '&chart_date_from='.urlencode($chart_date_from) : '' ?><?= $chart_date_to ? '&chart_date_to='.urlencode($chart_date_to) : '' ?><?= $pie_month ? '&pie_month='.urlencode($pie_month) : '' ?><?= $pie_year ? '&pie_year='.urlencode($pie_year) : '' ?>">Previous</a>
                   </li>
                 <?php else: ?>
                   <li class="page-item disabled">
@@ -393,7 +471,7 @@ require_once __DIR__ . '/../inc/header.php';
                 
                 if ($startPage > 1): ?>
                   <li class="page-item">
-                    <a class="page-link" href="?page=1<?= $filter_date_from ? '&date_from='.urlencode($filter_date_from) : '' ?><?= $filter_date_to ? '&date_to='.urlencode($filter_date_to) : '' ?><?= $filter_service ? '&service='.urlencode($filter_service) : '' ?><?= $filter_status ? '&status='.urlencode($filter_status) : '' ?><?= $chart_date_from ? '&chart_date_from='.urlencode($chart_date_from) : '' ?><?= $chart_date_to ? '&chart_date_to='.urlencode($chart_date_to) : '' ?><?= $pie_month ? '&pie_month='.urlencode($pie_month) : '' ?><?= $pie_year ? '&pie_year='.urlencode($pie_year) : '' ?>">1</a>
+                    <a class="page-link" href="?page=1<?= $filter_date_from ? '&date_from='.urlencode($filter_date_from) : '' ?><?= $filter_date_to ? '&date_to='.urlencode($filter_date_to) : '' ?><?= $filter_service ? '&service='.urlencode($filter_service) : '' ?><?= $filter_status ? '&status='.urlencode($filter_status) : '' ?><?= $search_barangay_id ? '&search_barangay_id='.urlencode($search_barangay_id) : '' ?><?= $chart_date_from ? '&chart_date_from='.urlencode($chart_date_from) : '' ?><?= $chart_date_to ? '&chart_date_to='.urlencode($chart_date_to) : '' ?><?= $pie_month ? '&pie_month='.urlencode($pie_month) : '' ?><?= $pie_year ? '&pie_year='.urlencode($pie_year) : '' ?>">1</a>
                   </li>
                   <?php if ($startPage > 2): ?>
                     <li class="page-item disabled"><span class="page-link">...</span></li>
@@ -402,7 +480,7 @@ require_once __DIR__ . '/../inc/header.php';
                 
                 <?php for($i = $startPage; $i <= $endPage; $i++): ?>
                   <li class="page-item <?= $i == $page ? 'active' : '' ?>">
-                    <a class="page-link" href="?page=<?= $i ?><?= $filter_date_from ? '&date_from='.urlencode($filter_date_from) : '' ?><?= $filter_date_to ? '&date_to='.urlencode($filter_date_to) : '' ?><?= $filter_service ? '&service='.urlencode($filter_service) : '' ?><?= $filter_status ? '&status='.urlencode($filter_status) : '' ?><?= $chart_date_from ? '&chart_date_from='.urlencode($chart_date_from) : '' ?><?= $chart_date_to ? '&chart_date_to='.urlencode($chart_date_to) : '' ?><?= $pie_month ? '&pie_month='.urlencode($pie_month) : '' ?><?= $pie_year ? '&pie_year='.urlencode($pie_year) : '' ?>"><?= $i ?></a>
+                    <a class="page-link" href="?page=<?= $i ?><?= $filter_date_from ? '&date_from='.urlencode($filter_date_from) : '' ?><?= $filter_date_to ? '&date_to='.urlencode($filter_date_to) : '' ?><?= $filter_service ? '&service='.urlencode($filter_service) : '' ?><?= $filter_status ? '&status='.urlencode($filter_status) : '' ?><?= $search_barangay_id ? '&search_barangay_id='.urlencode($search_barangay_id) : '' ?><?= $chart_date_from ? '&chart_date_from='.urlencode($chart_date_from) : '' ?><?= $chart_date_to ? '&chart_date_to='.urlencode($chart_date_to) : '' ?><?= $pie_month ? '&pie_month='.urlencode($pie_month) : '' ?><?= $pie_year ? '&pie_year='.urlencode($pie_year) : '' ?>"><?= $i ?></a>
                   </li>
                 <?php endfor; ?>
                 
@@ -411,13 +489,13 @@ require_once __DIR__ . '/../inc/header.php';
                     <li class="page-item disabled"><span class="page-link">...</span></li>
                   <?php endif; ?>
                   <li class="page-item">
-                    <a class="page-link" href="?page=<?= $totalPages ?><?= $filter_date_from ? '&date_from='.urlencode($filter_date_from) : '' ?><?= $filter_date_to ? '&date_to='.urlencode($filter_date_to) : '' ?><?= $filter_service ? '&service='.urlencode($filter_service) : '' ?><?= $filter_status ? '&status='.urlencode($filter_status) : '' ?><?= $chart_date_from ? '&chart_date_from='.urlencode($chart_date_from) : '' ?><?= $chart_date_to ? '&chart_date_to='.urlencode($chart_date_to) : '' ?><?= $pie_month ? '&pie_month='.urlencode($pie_month) : '' ?><?= $pie_year ? '&pie_year='.urlencode($pie_year) : '' ?>"><?= $totalPages ?></a>
+                    <a class="page-link" href="?page=<?= $totalPages ?><?= $filter_date_from ? '&date_from='.urlencode($filter_date_from) : '' ?><?= $filter_date_to ? '&date_to='.urlencode($filter_date_to) : '' ?><?= $filter_service ? '&service='.urlencode($filter_service) : '' ?><?= $filter_status ? '&status='.urlencode($filter_status) : '' ?><?= $search_barangay_id ? '&search_barangay_id='.urlencode($search_barangay_id) : '' ?><?= $chart_date_from ? '&chart_date_from='.urlencode($chart_date_from) : '' ?><?= $chart_date_to ? '&chart_date_to='.urlencode($chart_date_to) : '' ?><?= $pie_month ? '&pie_month='.urlencode($pie_month) : '' ?><?= $pie_year ? '&pie_year='.urlencode($pie_year) : '' ?>"><?= $totalPages ?></a>
                   </li>
                 <?php endif; ?>
                 
                 <?php if($page < $totalPages): ?>
                   <li class="page-item">
-                    <a class="page-link" href="?page=<?= $page + 1 ?><?= $filter_date_from ? '&date_from='.urlencode($filter_date_from) : '' ?><?= $filter_date_to ? '&date_to='.urlencode($filter_date_to) : '' ?><?= $filter_service ? '&service='.urlencode($filter_service) : '' ?><?= $filter_status ? '&status='.urlencode($filter_status) : '' ?><?= $chart_date_from ? '&chart_date_from='.urlencode($chart_date_from) : '' ?><?= $chart_date_to ? '&chart_date_to='.urlencode($chart_date_to) : '' ?><?= $pie_month ? '&pie_month='.urlencode($pie_month) : '' ?><?= $pie_year ? '&pie_year='.urlencode($pie_year) : '' ?>">Next</a>
+                    <a class="page-link" href="?page=<?= $page + 1 ?><?= $filter_date_from ? '&date_from='.urlencode($filter_date_from) : '' ?><?= $filter_date_to ? '&date_to='.urlencode($filter_date_to) : '' ?><?= $filter_service ? '&service='.urlencode($filter_service) : '' ?><?= $filter_status ? '&status='.urlencode($filter_status) : '' ?><?= $search_barangay_id ? '&search_barangay_id='.urlencode($search_barangay_id) : '' ?><?= $chart_date_from ? '&chart_date_from='.urlencode($chart_date_from) : '' ?><?= $chart_date_to ? '&chart_date_to='.urlencode($chart_date_to) : '' ?><?= $pie_month ? '&pie_month='.urlencode($pie_month) : '' ?><?= $pie_year ? '&pie_year='.urlencode($pie_year) : '' ?>">Next</a>
                   </li>
                 <?php else: ?>
                   <li class="page-item disabled">
@@ -535,6 +613,7 @@ require_once __DIR__ . '/../inc/header.php';
     <?php if($filter_date_to): ?>url.searchParams.set('date_to', '<?= esc($filter_date_to) ?>');<?php endif; ?>
     <?php if($filter_service): ?>url.searchParams.set('service', '<?= esc($filter_service) ?>');<?php endif; ?>
     <?php if($filter_status): ?>url.searchParams.set('status', '<?= esc($filter_status) ?>');<?php endif; ?>
+    <?php if($search_barangay_id): ?>url.searchParams.set('search_barangay_id', '<?= esc($search_barangay_id) ?>');<?php endif; ?>
     <?php if($pie_month): ?>url.searchParams.set('pie_month', '<?= esc($pie_month) ?>');<?php endif; ?>
     <?php if($pie_year): ?>url.searchParams.set('pie_year', '<?= esc($pie_year) ?>');<?php endif; ?>
     window.location = url.toString();
@@ -551,6 +630,7 @@ require_once __DIR__ . '/../inc/header.php';
     <?php if($filter_date_to): ?>url.searchParams.set('date_to', '<?= esc($filter_date_to) ?>');<?php endif; ?>
     <?php if($filter_service): ?>url.searchParams.set('service', '<?= esc($filter_service) ?>');<?php endif; ?>
     <?php if($filter_status): ?>url.searchParams.set('status', '<?= esc($filter_status) ?>');<?php endif; ?>
+    <?php if($search_barangay_id): ?>url.searchParams.set('search_barangay_id', '<?= esc($search_barangay_id) ?>');<?php endif; ?>
     <?php if($chart_date_from): ?>url.searchParams.set('chart_date_from', '<?= esc($chart_date_from) ?>');<?php endif; ?>
     <?php if($chart_date_to): ?>url.searchParams.set('chart_date_to', '<?= esc($chart_date_to) ?>');<?php endif; ?>
     window.location = url.toString();

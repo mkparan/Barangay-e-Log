@@ -164,11 +164,12 @@ if ($overdueCount > 0) {
 
 // Check for appointments scheduled today
 if ($todayScheduled > 0) {
+    $todayDate = date('Y-m-d');
     $alerts[] = [
         'type' => 'info',
         'icon' => 'calendar-check',
         'message' => "{$todayScheduled} appointment(s) scheduled for today",
-        'action' => 'appointments.php?filter=approved'
+        'action' => 'appointments.php?date_from=' . urlencode($todayDate) . '&date_to=' . urlencode($todayDate)
     ];
 }
 
@@ -410,7 +411,7 @@ if ($pendingStmt) {
 <?php if (!empty($alerts)): ?>
 <div class="row g-4 mb-4">
   <div class="col-12">
-    <div class="container-box">
+<div class="container-box">
       <h6 class="mb-3"><i class="bi bi-bell me-2"></i>Alerts & Notifications</h6>
       <div class="row g-2">
         <?php foreach($alerts as $alert): ?>
@@ -456,7 +457,7 @@ if ($pendingStmt) {
   </div>
   <div class="col-lg-4">
     <div class="container-box h-100 d-flex flex-column">
-      <div class="d-flex justify-content-between align-items-center mb-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
         <h5 class="mb-0">Services by Month</h5>
       </div>
       
@@ -503,8 +504,8 @@ if ($pendingStmt) {
         </div>
       <?php endif; ?>
     </div>
+    </div>
   </div>
-</div>
 
 <div class="row g-4 mb-4">
   <div class="col-lg-6">
@@ -591,7 +592,7 @@ if ($pendingStmt) {
       </div>
       <?php if(empty($pendingAppointmentsRows)): ?>
         <div class="alert alert-info mb-0">No pending appointments.</div>
-      <?php else: ?>
+  <?php else: ?>
         <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
           <table class="table table-sm table-hover align-middle mb-0">
             <thead class="table-light sticky-top">
@@ -603,7 +604,7 @@ if ($pendingStmt) {
                 <th class="text-end">Actions</th>
               </tr>
             </thead>
-            <tbody>
+        <tbody>
               <?php foreach($pendingAppointmentsRows as $p): 
                 $citizenPic = !empty($p['profile_picture']) ? $p['profile_picture'] : null;
                 $defaultPic = 'data:image/svg+xml;base64,' . base64_encode('<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#dee2e6"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="18" fill="#6c757d">' . strtoupper(substr($p['first_name'] ?? 'U', 0, 1)) . '</text></svg>');
@@ -628,12 +629,12 @@ if ($pendingStmt) {
                       <a href="appointments.php?action=reschedule&id=<?= esc($p['appointment_id']) ?>" class="btn btn-sm btn-warning" title="Reschedule">Resched</a>
                       <a href="appointments.php?action=complete&id=<?= esc($p['appointment_id']) ?>" class="btn btn-sm btn-outline-success" title="Mark as Released">Mark Released</a>
                     </div>
-                  </td>
-                </tr>
-              <?php endforeach; ?>
-            </tbody>
-          </table>
-        </div>
+              </td>
+            </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
         <?php if($pendingTotalPages > 1): ?>
           <nav aria-label="Pending queue pagination" class="mt-3">
             <ul class="pagination pagination-sm justify-content-center mb-0">
@@ -690,8 +691,8 @@ if ($pendingStmt) {
             </div>
           </nav>
         <?php endif; ?>
-      <?php endif; ?>
-    </div>
+  <?php endif; ?>
+</div>
   </div>
 </div>
 

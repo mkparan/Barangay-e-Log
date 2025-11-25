@@ -16,8 +16,16 @@ $id = $_GET['id'] ?? null;
 if ($action && $id) {
     $filter = $_GET['filter'] ?? 'all';
     $serviceFilter = $_GET['service'] ?? '';
+    $searchBarangayId = trim($_GET['search_barangay_id'] ?? '');
+    $dateFilter = $_GET['date_filter'] ?? '';
+    $dateFrom = $_GET['date_from'] ?? '';
+    $dateTo = $_GET['date_to'] ?? '';
     $redirectFilter = $filter !== 'all' ? "&filter={$filter}" : '';
     $redirectService = $serviceFilter ? "&service=" . urlencode($serviceFilter) : '';
+    $redirectSearch = $searchBarangayId ? "&search_barangay_id=" . urlencode($searchBarangayId) : '';
+    $redirectDateFilter = $dateFilter ? "&date_filter=" . urlencode($dateFilter) : '';
+    $redirectDateFrom = $dateFrom ? "&date_from=" . urlencode($dateFrom) : '';
+    $redirectDateTo = $dateTo ? "&date_to=" . urlencode($dateTo) : '';
     
     if ($action === 'approve') {
         // Assign the appointment to the official who approves it
@@ -25,7 +33,7 @@ if ($action && $id) {
         $stmt->bind_param('ii', $_SESSION['user']['user_id'], $id);
         $stmt->execute();
         audit_log($_SESSION['user']['username'], $_SESSION['user']['user_id'], 'appointment_approved', 'appointments', $id);
-        header("Location: appointments.php?msg=approved{$redirectFilter}{$redirectService}");
+        header("Location: appointments.php?msg=approved{$redirectFilter}{$redirectService}{$redirectSearch}{$redirectDateFilter}{$redirectDateFrom}{$redirectDateTo}&page=1");
         exit;
 
     } elseif ($action === 'decline') {
@@ -33,7 +41,7 @@ if ($action && $id) {
         $stmt->bind_param('i', $id);
         $stmt->execute();
         audit_log($_SESSION['user']['username'], $_SESSION['user']['user_id'], 'appointment_declined', 'appointments', $id);
-        header("Location: appointments.php?msg=declined{$redirectFilter}{$redirectService}");
+        header("Location: appointments.php?msg=declined{$redirectFilter}{$redirectService}{$redirectSearch}{$redirectDateFilter}{$redirectDateFrom}{$redirectDateTo}&page=1");
         exit;
 
     } elseif ($action === 'reschedule') {
@@ -45,7 +53,7 @@ if ($action && $id) {
         $stmt->bind_param('ii', $_SESSION['user']['user_id'], $id);
         $stmt->execute();
         audit_log($_SESSION['user']['username'], $_SESSION['user']['user_id'], 'appointment_completed', 'appointments', $id);
-        header("Location: appointments.php?msg=completed{$redirectFilter}{$redirectService}");
+        header("Location: appointments.php?msg=completed{$redirectFilter}{$redirectService}{$redirectSearch}{$redirectDateFilter}{$redirectDateFrom}{$redirectDateTo}&page=1");
         exit;
     }
 }
@@ -53,6 +61,11 @@ if ($action && $id) {
 // GET APPOINTMENTS
 $filter = $_GET['filter'] ?? 'all';
 $serviceFilter = $_GET['service'] ?? '';
+$searchBarangayId = trim($_GET['search_barangay_id'] ?? '');
+$dateFilter = $_GET['date_filter'] ?? ''; // today, upcoming, past
+$dateFrom = $_GET['date_from'] ?? '';
+$dateTo = $_GET['date_to'] ?? '';
+$today = date('Y-m-d');
 $where = "1";
 
 if ($filter === 'pending') $where = "a.status='pending'";
@@ -62,6 +75,26 @@ if ($filter === 'completed') $where = "a.status='completed'";
 
 if ($serviceFilter) {
     $where .= " AND a.service_type = ?";
+}
+
+// Date filtering
+if ($dateFilter === 'today') {
+    $where .= " AND a.preferred_date = ?";
+} elseif ($dateFilter === 'upcoming') {
+    $where .= " AND a.preferred_date > ?";
+} elseif ($dateFilter === 'past') {
+    $where .= " AND a.preferred_date < ?";
+} elseif ($dateFrom && $dateTo) {
+    $where .= " AND a.preferred_date >= ? AND a.preferred_date <= ?";
+} elseif ($dateFrom) {
+    $where .= " AND a.preferred_date >= ?";
+} elseif ($dateTo) {
+    $where .= " AND a.preferred_date <= ?";
+}
+
+// Barangay ID search
+if ($searchBarangayId) {
+    $where .= " AND c.cin LIKE ?";
 }
 
 // Pagination - must be before query execution
@@ -80,9 +113,49 @@ $countSql = "
     JOIN citizens c ON a.citizen_id = c.citizen_id
     WHERE $where
 ";
+
+// Build count parameters (order must match WHERE clause)
+$countParams = [];
+$countTypes = '';
+
+// Add service filter FIRST (matches WHERE clause order)
 if ($serviceFilter) {
+    $countParams[] = $serviceFilter;
+    $countTypes .= 's';
+}
+
+// Add date filter parameters SECOND (matches WHERE clause order)
+if ($dateFilter === 'today') {
+    $countParams[] = $today;
+    $countTypes .= 's';
+} elseif ($dateFilter === 'upcoming') {
+    $countParams[] = $today;
+    $countTypes .= 's';
+} elseif ($dateFilter === 'past') {
+    $countParams[] = $today;
+    $countTypes .= 's';
+} elseif ($dateFrom && $dateTo) {
+    $countParams[] = $dateFrom;
+    $countParams[] = $dateTo;
+    $countTypes .= 'ss';
+} elseif ($dateFrom) {
+    $countParams[] = $dateFrom;
+    $countTypes .= 's';
+} elseif ($dateTo) {
+    $countParams[] = $dateTo;
+    $countTypes .= 's';
+}
+
+// Add Barangay ID search THIRD (matches WHERE clause order)
+if ($searchBarangayId) {
+    $countParams[] = "%{$searchBarangayId}%";
+    $countTypes .= 's';
+}
+
+// Execute count query
+if (!empty($countParams)) {
     $countStmt = $db->prepare($countSql);
-    $countStmt->bind_param('s', $serviceFilter);
+    $countStmt->bind_param($countTypes, ...$countParams);
     $countStmt->execute();
     $totalCount = (int)($countStmt->get_result()->fetch_assoc()['total'] ?? 0);
 } else {
@@ -91,22 +164,75 @@ if ($serviceFilter) {
 }
 $totalPages = max(1, ceil($totalCount / $perPage));
 
-$sql = "
-    SELECT a.*, c.first_name, c.last_name, c.profile_picture, p.full_name AS processed_by_name
-    FROM appointments a
-    JOIN citizens c ON a.citizen_id = c.citizen_id
-    LEFT JOIN users p ON a.processed_by = p.user_id
-    WHERE $where
-    ORDER BY a.created_at DESC
-    LIMIT $perPage OFFSET $offset
-";
+// Build parameters array for binding (order must match WHERE clause)
+$bindParams = [];
+$bindTypes = '';
 
+// Add service filter FIRST (matches WHERE clause order)
 if ($serviceFilter) {
+    $bindParams[] = $serviceFilter;
+    $bindTypes .= 's';
+}
+
+// Add date filter parameters SECOND (matches WHERE clause order)
+if ($dateFilter === 'today') {
+    $bindParams[] = $today;
+    $bindTypes .= 's';
+} elseif ($dateFilter === 'upcoming') {
+    $bindParams[] = $today;
+    $bindTypes .= 's';
+} elseif ($dateFilter === 'past') {
+    $bindParams[] = $today;
+    $bindTypes .= 's';
+} elseif ($dateFrom && $dateTo) {
+    $bindParams[] = $dateFrom;
+    $bindParams[] = $dateTo;
+    $bindTypes .= 'ss';
+} elseif ($dateFrom) {
+    $bindParams[] = $dateFrom;
+    $bindTypes .= 's';
+} elseif ($dateTo) {
+    $bindParams[] = $dateTo;
+    $bindTypes .= 's';
+}
+
+// Add Barangay ID search THIRD (matches WHERE clause order)
+if ($searchBarangayId) {
+    $bindParams[] = "%{$searchBarangayId}%";
+    $bindTypes .= 's';
+}
+
+// Build SQL - use placeholders for LIMIT/OFFSET if we have any filters
+if (!empty($bindParams)) {
+    $sql = "
+        SELECT a.*, c.first_name, c.last_name, c.cin, c.profile_picture, p.full_name AS processed_by_name
+        FROM appointments a
+        JOIN citizens c ON a.citizen_id = c.citizen_id
+        LEFT JOIN users p ON a.processed_by = p.user_id
+        WHERE $where
+        ORDER BY a.created_at DESC
+        LIMIT ? OFFSET ?
+    ";
+    // Add pagination parameters
+    $bindParams[] = $perPage;
+    $bindParams[] = $offset;
+    $bindTypes .= 'ii';
+    
     $stmt = $db->prepare($sql);
-    $stmt->bind_param('s', $serviceFilter);
+    $stmt->bind_param($bindTypes, ...$bindParams);
     $stmt->execute();
     $appointments = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 } else {
+    // No filters - use direct query
+    $sql = "
+        SELECT a.*, c.first_name, c.last_name, c.cin, c.profile_picture, p.full_name AS processed_by_name
+        FROM appointments a
+        JOIN citizens c ON a.citizen_id = c.citizen_id
+        LEFT JOIN users p ON a.processed_by = p.user_id
+        WHERE $where
+        ORDER BY a.created_at DESC
+        LIMIT $perPage OFFSET $offset
+    ";
     $stmt = $db->query($sql);
     $appointments = $stmt->fetch_all(MYSQLI_ASSOC);
 }
@@ -125,17 +251,95 @@ require_once __DIR__ . '/../inc/header.php';
   </div>
   <?php endif; ?>
 
+  <!-- Search by Barangay ID with Date Filters -->
+  <div class="card bg-primary text-white mb-3">
+    <div class="card-body">
+      <form method="get" action="appointments.php">
+        <input type="hidden" name="filter" value="<?= esc($filter) ?>">
+        <input type="hidden" name="service" value="<?= esc($serviceFilter) ?>">
+        <div class="row g-3 align-items-end">
+          <div class="col-md-4">
+            <label class="form-label text-white fw-bold mb-2">
+              <i class="bi bi-search me-2"></i>Search by Barangay ID
+            </label>
+            <input type="text" 
+                   name="search_barangay_id" 
+                   class="form-control" 
+                   placeholder="Enter Barangay ID..." 
+                   value="<?= esc($searchBarangayId) ?>">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label text-white fw-bold mb-2">Date Filter</label>
+            <select name="date_filter" class="form-select">
+              <option value="">All Dates</option>
+              <option value="today" <?= $dateFilter === 'today' ? 'selected' : '' ?>>Today</option>
+              <option value="upcoming" <?= $dateFilter === 'upcoming' ? 'selected' : '' ?>>Upcoming</option>
+              <option value="past" <?= $dateFilter === 'past' ? 'selected' : '' ?>>Past</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label text-white fw-bold mb-2">Date From</label>
+            <input type="date" name="date_from" class="form-control" value="<?= esc($dateFrom) ?>">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label text-white fw-bold mb-2">Date To</label>
+            <input type="date" name="date_to" class="form-control" value="<?= esc($dateTo) ?>">
+          </div>
+          <div class="col-md-1">
+            <button type="submit" class="btn btn-light w-100">
+              <i class="bi bi-search"></i>
+            </button>
+          </div>
+        </div>
+        <?php if ($searchBarangayId || $dateFilter || $dateFrom || $dateTo): ?>
+          <div class="mt-2">
+            <a href="appointments.php?filter=<?= esc($filter) ?><?= $serviceFilter ? '&service=' . urlencode($serviceFilter) : '' ?>&page=1" class="btn btn-sm btn-outline-light">
+              <i class="bi bi-x"></i> Clear Search
+            </a>
+          </div>
+        <?php endif; ?>
+      </form>
+    </div>
+  </div>
+
+  <?php if ($searchBarangayId || $dateFilter || $dateFrom || $dateTo): ?>
+    <div class="alert alert-info alert-dismissible fade show mb-3">
+      <i class="bi bi-info-circle"></i> 
+      <?php if ($searchBarangayId): ?>
+        Showing results for Barangay ID: <strong><?= esc($searchBarangayId) ?></strong>
+      <?php endif; ?>
+      <?php if ($dateFilter === 'today'): ?>
+        | Filter: <strong>Today</strong>
+      <?php elseif ($dateFilter === 'upcoming'): ?>
+        | Filter: <strong>Upcoming</strong>
+      <?php elseif ($dateFilter === 'past'): ?>
+        | Filter: <strong>Past</strong>
+      <?php elseif ($dateFrom || $dateTo): ?>
+        | Date Range: <strong><?= $dateFrom ? esc($dateFrom) : 'Any' ?> to <?= $dateTo ? esc($dateTo) : 'Any' ?></strong>
+      <?php endif; ?>
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+  <?php endif; ?>
+
   <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <div class="d-flex flex-wrap gap-2">
-      <a href="appointments.php?filter=all<?= $serviceFilter ? '&service=' . urlencode($serviceFilter) : '' ?>&page=1" class="btn btn-outline-primary btn-sm">All</a>
-      <a href="appointments.php?filter=pending<?= $serviceFilter ? '&service=' . urlencode($serviceFilter) : '' ?>&page=1" class="btn btn-outline-warning btn-sm">Pending</a>
-      <a href="appointments.php?filter=approved<?= $serviceFilter ? '&service=' . urlencode($serviceFilter) : '' ?>&page=1" class="btn btn-outline-success btn-sm">Approved</a>
-      <a href="appointments.php?filter=declined<?= $serviceFilter ? '&service=' . urlencode($serviceFilter) : '' ?>&page=1" class="btn btn-outline-danger btn-sm">Declined</a>
-      <a href="appointments.php?filter=cancelled<?= $serviceFilter ? '&service=' . urlencode($serviceFilter) : '' ?>&page=1" class="btn btn-outline-warning btn-sm">Cancelled</a>
-      <a href="appointments.php?filter=completed<?= $serviceFilter ? '&service=' . urlencode($serviceFilter) : '' ?>&page=1" class="btn btn-outline-secondary btn-sm">Completed</a>
+      <?php
+      $filterParams = '';
+      if ($serviceFilter) $filterParams .= '&service=' . urlencode($serviceFilter);
+      if ($searchBarangayId) $filterParams .= '&search_barangay_id=' . urlencode($searchBarangayId);
+      if ($dateFilter) $filterParams .= '&date_filter=' . urlencode($dateFilter);
+      if ($dateFrom) $filterParams .= '&date_from=' . urlencode($dateFrom);
+      if ($dateTo) $filterParams .= '&date_to=' . urlencode($dateTo);
+      ?>
+      <a href="appointments.php?filter=all<?= $filterParams ?>&page=1" class="btn btn-outline-primary btn-sm">All</a>
+      <a href="appointments.php?filter=pending<?= $filterParams ?>&page=1" class="btn btn-outline-warning btn-sm">Pending</a>
+      <a href="appointments.php?filter=approved<?= $filterParams ?>&page=1" class="btn btn-outline-success btn-sm">Approved</a>
+      <a href="appointments.php?filter=declined<?= $filterParams ?>&page=1" class="btn btn-outline-danger btn-sm">Declined</a>
+      <a href="appointments.php?filter=cancelled<?= $filterParams ?>&page=1" class="btn btn-outline-warning btn-sm">Cancelled</a>
+      <a href="appointments.php?filter=completed<?= $filterParams ?>&page=1" class="btn btn-outline-secondary btn-sm">Completed</a>
     </div>
     <div class="d-flex align-items-center gap-2">
-      <select class="form-select form-select-sm" style="width: auto;" onchange="window.location.href='appointments.php?filter=<?= esc($filter) ?>&service=' + encodeURIComponent(this.value) + '&page=1'">
+      <select class="form-select form-select-sm" style="width: auto;" onchange="window.location.href='appointments.php?filter=<?= esc($filter) ?>&service=' + encodeURIComponent(this.value) + '<?= $searchBarangayId ? '&search_barangay_id=' . urlencode($searchBarangayId) : '' ?><?= $dateFilter ? '&date_filter=' . urlencode($dateFilter) : '' ?><?= $dateFrom ? '&date_from=' . urlencode($dateFrom) : '' ?><?= $dateTo ? '&date_to=' . urlencode($dateTo) : '' ?>&page=1'">
         <option value="">All Services</option>
         <?php foreach($availableServices as $s): ?>
           <option value="<?= esc($s['service_type']) ?>" <?= $serviceFilter === $s['service_type'] ? 'selected' : '' ?>>
@@ -153,6 +357,7 @@ require_once __DIR__ . '/../inc/header.php';
         <tr>
           <th>ID</th>
           <th>Citizen</th>
+          <th>Barangay ID</th>
           <th>Service</th>
           <th>Date</th>
           <th>Queue / Time</th>
@@ -164,7 +369,13 @@ require_once __DIR__ . '/../inc/header.php';
       <tbody>
         <?php if(empty($appointments)): ?>
           <tr>
-            <td colspan="8" class="text-center text-muted">No appointments found.</td>
+            <td colspan="9" class="text-center text-muted">
+              <?php if ($searchBarangayId || $dateFilter || $dateFrom || $dateTo): ?>
+                No appointments found matching your search criteria.
+              <?php else: ?>
+                No appointments found.
+              <?php endif; ?>
+            </td>
           </tr>
         <?php else: ?>
           <?php foreach($appointments as $a): 
@@ -182,6 +393,7 @@ require_once __DIR__ . '/../inc/header.php';
                 <span><?= esc($a['first_name'].' '.$a['last_name']) ?></span>
               </div>
             </td>
+            <td><strong><?= esc($a['cin']) ?></strong></td>
             <td><?= esc($a['service_type']) ?></td>
             <td><?= esc($a['preferred_date']) ?></td>
             <td>
@@ -216,6 +428,18 @@ require_once __DIR__ . '/../inc/header.php';
                   if ($serviceFilter) {
                     $actionParams .= "&service=" . urlencode($serviceFilter);
                   }
+                  if ($searchBarangayId) {
+                    $actionParams .= "&search_barangay_id=" . urlencode($searchBarangayId);
+                  }
+                  if ($dateFilter) {
+                    $actionParams .= "&date_filter=" . urlencode($dateFilter);
+                  }
+                  if ($dateFrom) {
+                    $actionParams .= "&date_from=" . urlencode($dateFrom);
+                  }
+                  if ($dateTo) {
+                    $actionParams .= "&date_to=" . urlencode($dateTo);
+                  }
                 ?>
                 <?php if ($a['status'] === 'pending'): ?>
                   <a class="btn btn-success btn-sm" href="?action=approve&id=<?= esc($a['appointment_id']) ?>&<?= $actionParams ?>">Approve</a>
@@ -243,6 +467,18 @@ require_once __DIR__ . '/../inc/header.php';
           $paginationParams = "filter=" . esc($filter);
           if ($serviceFilter) {
             $paginationParams .= "&service=" . urlencode($serviceFilter);
+          }
+          if ($searchBarangayId) {
+            $paginationParams .= "&search_barangay_id=" . urlencode($searchBarangayId);
+          }
+          if ($dateFilter) {
+            $paginationParams .= "&date_filter=" . urlencode($dateFilter);
+          }
+          if ($dateFrom) {
+            $paginationParams .= "&date_from=" . urlencode($dateFrom);
+          }
+          if ($dateTo) {
+            $paginationParams .= "&date_to=" . urlencode($dateTo);
           }
         ?>
         <?php if($page > 1): ?>

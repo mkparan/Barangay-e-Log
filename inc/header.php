@@ -182,6 +182,7 @@ $isAdminDashboard = ($currentPage === 'index.php' && strpos($currentPath, '/admi
     <div class="collapse navbar-collapse" id="navMenu">
       <ul class="navbar-nav ms-auto align-items-center">
         <li class="nav-item"><a class="nav-link <?= $isHome ? 'active fw-bold' : '' ?>" href="/elog_barangay/public/index.php">Home</a></li>
+        <li class="nav-item"><a class="nav-link <?= ($currentPage === 'about.php' && strpos($currentPath, '/public/') !== false) ? 'active fw-bold' : '' ?>" href="/elog_barangay/public/about.php">About</a></li>
         <?php if (!empty($_SESSION['citizen'])): 
           // Get profile picture
           $citizenPic = null;
