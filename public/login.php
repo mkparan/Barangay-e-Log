@@ -69,7 +69,7 @@ require_once __DIR__ . '/../inc/header.php';
     </div>
 
     <div class="col-12 col-md-6 col-lg-7 ms-lg-auto d-flex align-items-center justify-content-center">
-        <img src="/elog_barangay/public/assets/images/logo.png" alt="Barangay Duangan Logo" style="max-width: 400px; max-height: 400px; width: 100%; height: auto; object-fit: contain;">
+        <img src="/elog_barangay/public/assets/images/logo.png" alt="Barangay Duangan Logo" class="logo-large">
     </div>
 </div>
 

@@ -24,141 +24,17 @@ $isAdminDashboard = ($currentPage === 'index.php' && strpos($currentPath, '/admi
 <link rel="icon" type="image/png" sizes="16x16" href="/elog_barangay/public/favicon.php?size=16">
 <link rel="icon" type="image/png" sizes="48x48" href="/elog_barangay/public/favicon.php?size=48">
 <link rel="apple-touch-icon" sizes="180x180" href="/elog_barangay/public/favicon.php?size=180">
-<!-- Bootstrap 5 CDN -->
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-<!-- Bootstrap Icons -->
+<!-- Bootstrap 5 Local -->
+<link href="/elog_barangay/public/assets/css/bootstrap.min.css" rel="stylesheet">
+<!-- Bootstrap Icons - CDN (for offline support, download bootstrap-icons font files and host locally) -->
+<!-- To make Bootstrap Icons work offline, download from https://icons.getbootstrap.com/ and place font files in public/assets/fonts/bootstrap-icons/ -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<!-- Main Custom Stylesheet -->
+<link href="/elog_barangay/public/assets/css/main.css" rel="stylesheet">
+<!-- CSS Variable (Dynamic from PHP) -->
 <style>
   :root {
     --gov-blue: <?= $brandColor ?>;
-  }
-  body { background-color: #f4f6f9; }
-  [data-bs-theme="dark"] body { background-color: #1a1a1a; }
-  .navbar-brand { font-weight: 600; letter-spacing: .2px; }
-  .nav-link.active { 
-    color: #fff !important; 
-    text-decoration: underline;
-    text-underline-offset: 4px;
-  }
-  .container-box {
-    background: #fff;
-    padding: 22px;
-    border-radius: 8px;
-    border: 1px solid rgba(0,0,0,0.04);
-  }
-  [data-bs-theme="dark"] .container-box {
-    background: #2d2d2d;
-    border-color: rgba(255,255,255,0.1);
-    color: #e0e0e0;
-  }
-  [data-bs-theme="dark"] .card {
-    background: #2d2d2d;
-    border-color: rgba(255,255,255,0.1);
-    color: #e0e0e0;
-  }
-  [data-bs-theme="dark"] .card-header {
-    background: #2d2d2d !important;
-    border-color: rgba(255,255,255,0.1) !important;
-    color: #e0e0e0;
-  }
-  [data-bs-theme="dark"] .list-group-item {
-    background: #2d2d2d;
-    border-color: rgba(255,255,255,0.1);
-    color: #e0e0e0;
-  }
-  [data-bs-theme="dark"] .bg-light {
-    background-color: #2d2d2d !important;
-  }
-  [data-bs-theme="dark"] .bg-white {
-    background-color: #2d2d2d !important;
-  }
-  [data-bs-theme="dark"] .text-muted {
-    color: #a0a0a0 !important;
-  }
-  [data-bs-theme="dark"] .alert-info {
-    background-color: #1e3a5f;
-    border-color: #2d5a8f;
-    color: #b8d4f0;
-  }
-  .login-layout {
-    min-height: 60vh;
-  }
-  .mock-icon-card {
-    border: 1px dashed rgba(0,0,0,0.12);
-    background: linear-gradient(135deg, rgba(0,51,160,0.04), rgba(0,51,160,0.02));
-  }
-  .mock-icon-circle {
-    width: 150px;
-    height: 150px;
-    border-radius: 50%;
-    background: rgba(0,51,160,0.08);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: rgba(0,51,160,0.6);
-    text-transform: uppercase;
-    letter-spacing: 1px;
-  }
-  @media (max-width: 576px) {
-    .mock-icon-circle {
-      width: 110px;
-      height: 110px;
-      font-size: 1rem;
-    }
-  }
-  .btn-primary {
-    background: var(--gov-blue);
-    border-color: var(--gov-blue);
-  }
-  .bg-primary-custom { background: var(--gov-blue) !important; }
-  .text-primary-custom { color: var(--gov-blue) !important; }
-  
-  /* Splash Screen */
-  #splashScreen {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: var(--gov-blue);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 9999;
-    opacity: 1;
-    transition: opacity 0.5s ease-out;
-  }
-  
-  #splashScreen.hide {
-    opacity: 0;
-    pointer-events: none;
-  }
-  
-  #splashScreen .splash-logo {
-    max-width: 300px;
-    max-height: 300px;
-    width: auto;
-    height: auto;
-    opacity: 0;
-    animation: fadeInLogo 1s ease-in forwards;
-  }
-  
-  @keyframes fadeInLogo {
-    from {
-      opacity: 0;
-      transform: scale(0.9);
-    }
-    to {
-      opacity: 1;
-      transform: scale(1);
-    }
-  }
-  
-  /* Ensure dropdown menus appear above sticky table headers */
-  .navbar .dropdown-menu {
-    z-index: 1030 !important;
   }
 </style>
 </head>
@@ -172,7 +48,7 @@ $isAdminDashboard = ($currentPage === 'index.php' && strpos($currentPath, '/admi
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary-custom mb-4">
   <div class="container">
     <a class="navbar-brand d-flex align-items-center" href="/elog_barangay/public/index.php">
-      <img src="/elog_barangay/public/assets/images/logo.png" alt="Barangay Duangan Logo" class="me-2" style="height: 48px; width: 48px; object-fit: contain;">
+      <img src="/elog_barangay/public/assets/images/logo.png" alt="Barangay Duangan Logo" class="me-2 navbar-logo">
       Barangay e-Log
     </a>
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu">
@@ -206,8 +82,7 @@ $isAdminDashboard = ($currentPage === 'index.php' && strpos($currentPath, '/admi
             <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="citizenMenu" role="button" data-bs-toggle="dropdown" aria-expanded="false">
               <img src="<?= $citizenPic ? esc('/elog_barangay/public/' . $citizenPic) : $defaultPic ?>" 
                    alt="Profile" 
-                   class="rounded-circle me-2" 
-                   style="width: 32px; height: 32px; object-fit: cover;">
+                   class="rounded-circle me-2 profile-picture-nav">
               <span><?= esc($_SESSION['citizen']['name']) ?></span>
             </a>
             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="citizenMenu">
@@ -241,8 +116,7 @@ $isAdminDashboard = ($currentPage === 'index.php' && strpos($currentPath, '/admi
             <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="adminMenu" role="button" data-bs-toggle="dropdown" aria-expanded="false">
               <img src="<?= $adminPic ? esc('/elog_barangay/public/' . $adminPic) : $defaultPic ?>" 
                    alt="Profile" 
-                   class="rounded-circle me-2" 
-                   style="width: 32px; height: 32px; object-fit: cover;">
+                   class="rounded-circle me-2 profile-picture-nav">
               <span><?= esc($_SESSION['user']['full_name']) ?></span>
             </a>
             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="adminMenu">

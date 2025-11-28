@@ -207,7 +207,7 @@ require_once __DIR__ . '/../inc/header.php';
       <?php if(empty($officials)): ?>
         <div class="alert alert-info mb-0">No officials created yet.</div>
       <?php else: ?>
-        <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
+        <div class="table-responsive scrollable-table">
           <table class="table table-sm table-hover align-middle">
             <thead class="table-light sticky-top">
               <tr>

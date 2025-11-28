@@ -339,7 +339,7 @@ require_once __DIR__ . '/../inc/header.php';
       <a href="appointments.php?filter=completed<?= $filterParams ?>&page=1" class="btn btn-outline-secondary btn-sm">Completed</a>
     </div>
     <div class="d-flex align-items-center gap-2">
-      <select class="form-select form-select-sm" style="width: auto;" onchange="window.location.href='appointments.php?filter=<?= esc($filter) ?>&service=' + encodeURIComponent(this.value) + '<?= $searchBarangayId ? '&search_barangay_id=' . urlencode($searchBarangayId) : '' ?><?= $dateFilter ? '&date_filter=' . urlencode($dateFilter) : '' ?><?= $dateFrom ? '&date_from=' . urlencode($dateFrom) : '' ?><?= $dateTo ? '&date_to=' . urlencode($dateTo) : '' ?>&page=1'">
+      <select class="form-select form-select-sm w-auto" onchange="window.location.href='appointments.php?filter=<?= esc($filter) ?>&service=' + encodeURIComponent(this.value) + '<?= $searchBarangayId ? '&search_barangay_id=' . urlencode($searchBarangayId) : '' ?><?= $dateFilter ? '&date_filter=' . urlencode($dateFilter) : '' ?><?= $dateFrom ? '&date_from=' . urlencode($dateFrom) : '' ?><?= $dateTo ? '&date_to=' . urlencode($dateTo) : '' ?>&page=1'">
         <option value="">All Services</option>
         <?php foreach($availableServices as $s): ?>
           <option value="<?= esc($s['service_type']) ?>" <?= $serviceFilter === $s['service_type'] ? 'selected' : '' ?>>
@@ -351,7 +351,7 @@ require_once __DIR__ . '/../inc/header.php';
     </div>
   </div>
 
-  <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
+    <div class="table-responsive scrollable-table">
     <table class="table table-bordered table-hover align-middle">
       <thead class="table-light sticky-top">
         <tr>
@@ -388,8 +388,7 @@ require_once __DIR__ . '/../inc/header.php';
               <div class="d-flex align-items-center">
                 <img src="<?= $citizenPic ? esc('/elog_barangay/public/' . $citizenPic) : $defaultPic ?>" 
                      alt="Profile" 
-                     class="rounded-circle me-2" 
-                     style="width: 40px; height: 40px; object-fit: cover;">
+                     class="rounded-circle me-2 profile-picture-md">
                 <span><?= esc($a['first_name'].' '.$a['last_name']) ?></span>
               </div>
             </td>

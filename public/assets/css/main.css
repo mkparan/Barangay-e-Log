@@ -1,0 +1,316 @@
+/* ============================================
+   Barangay e-Log System - Main Stylesheet
+   ============================================ */
+
+/* CSS Variables - Set via PHP in header.php */
+:root {
+  --gov-blue: #0033A0;
+}
+
+/* Base Styles */
+body {
+  background-color: #f4f6f9;
+}
+
+[data-bs-theme="dark"] body {
+  background-color: #1a1a1a;
+}
+
+/* Navigation */
+.navbar-brand {
+  font-weight: 600;
+  letter-spacing: .2px;
+}
+
+.nav-link.active {
+  color: #fff !important;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.navbar-logo {
+  height: 48px;
+  width: 48px;
+  object-fit: contain;
+}
+
+.profile-picture-nav {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  object-fit: cover;
+  border-radius: 50%;
+  aspect-ratio: 1;
+}
+
+/* Container Box */
+.container-box {
+  background: #fff;
+  padding: 22px;
+  border-radius: 8px;
+  border: 1px solid rgba(0,0,0,0.04);
+}
+
+[data-bs-theme="dark"] .container-box {
+  background: #2d2d2d;
+  border-color: rgba(255,255,255,0.1);
+  color: #e0e0e0;
+}
+
+/* Dark Theme Overrides */
+[data-bs-theme="dark"] .card {
+  background: #2d2d2d;
+  border-color: rgba(255,255,255,0.1);
+  color: #e0e0e0;
+}
+
+[data-bs-theme="dark"] .card-header {
+  background: #2d2d2d !important;
+  border-color: rgba(255,255,255,0.1) !important;
+  color: #e0e0e0;
+}
+
+[data-bs-theme="dark"] .list-group-item {
+  background: #2d2d2d;
+  border-color: rgba(255,255,255,0.1);
+  color: #e0e0e0;
+}
+
+[data-bs-theme="dark"] .bg-light {
+  background-color: #2d2d2d !important;
+}
+
+[data-bs-theme="dark"] .bg-white {
+  background-color: #2d2d2d !important;
+}
+
+[data-bs-theme="dark"] .text-muted {
+  color: #a0a0a0 !important;
+}
+
+[data-bs-theme="dark"] .alert-info {
+  background-color: #1e3a5f;
+  border-color: #2d5a8f;
+  color: #b8d4f0;
+}
+
+/* Layout */
+.login-layout {
+  min-height: 60vh;
+}
+
+/* Mock Icon Styles */
+.mock-icon-card {
+  border: 1px dashed rgba(0,0,0,0.12);
+  background: linear-gradient(135deg, rgba(0,51,160,0.04), rgba(0,51,160,0.02));
+}
+
+.mock-icon-circle {
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  background: rgba(0,51,160,0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: rgba(0,51,160,0.6);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+@media (max-width: 576px) {
+  .mock-icon-circle {
+    width: 110px;
+    height: 110px;
+    font-size: 1rem;
+  }
+}
+
+/* Buttons */
+.btn-primary {
+  background: var(--gov-blue);
+  border-color: var(--gov-blue);
+}
+
+.btn-primary:hover {
+  background: #002680;
+  border-color: #002680;
+}
+
+/* Custom Colors */
+.bg-primary-custom {
+  background: var(--gov-blue) !important;
+}
+
+.text-primary-custom {
+  color: var(--gov-blue) !important;
+}
+
+/* Splash Screen */
+#splashScreen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: var(--gov-blue);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  opacity: 1;
+  transition: opacity 0.5s ease-out;
+}
+
+#splashScreen.hide {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#splashScreen .splash-logo {
+  max-width: 300px;
+  max-height: 300px;
+  width: auto;
+  height: auto;
+  opacity: 0;
+  animation: fadeInLogo 1s ease-in forwards;
+}
+
+@keyframes fadeInLogo {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Dropdown Menu Z-Index */
+.navbar .dropdown-menu {
+  z-index: 1030 !important;
+}
+
+/* Image Styles */
+.announcement-image {
+  max-height: 200px;
+  object-fit: cover;
+}
+
+.announcement-image-modal {
+  max-height: 400px;
+  object-fit: contain;
+}
+
+/* Profile Picture Sizes */
+.profile-picture-sm {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  object-fit: cover;
+  border-radius: 50%;
+  aspect-ratio: 1;
+}
+
+.profile-picture-md {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  object-fit: cover;
+  border-radius: 50%;
+  aspect-ratio: 1;
+}
+
+.profile-picture-lg {
+  width: 120px;
+  height: 120px;
+  min-width: 120px;
+  min-height: 120px;
+  object-fit: cover;
+  border-radius: 50%;
+  border-width: 3px !important;
+  aspect-ratio: 1;
+}
+
+.profile-picture-xl {
+  width: 150px;
+  height: 150px;
+  min-width: 150px;
+  min-height: 150px;
+  object-fit: cover;
+  border-radius: 50%;
+  border-width: 3px !important;
+  aspect-ratio: 1;
+}
+
+/* Scrollable Containers */
+.scrollable-content {
+  max-height: 700px;
+  overflow-y: auto;
+}
+
+.scrollable-table {
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.scrollable-table-sm {
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.scrollable-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.scrollable-list-lg {
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+/* Chart Containers */
+.chart-container {
+  height: 250px;
+}
+
+/* Interactive Elements */
+.clickable {
+  cursor: pointer;
+}
+
+/* Text Utilities */
+.preserve-whitespace {
+  white-space: pre-wrap;
+}
+
+/* Upload Overlay */
+.upload-overlay {
+  background: rgba(0,0,0,0.7);
+}
+
+/* Container with Max Height */
+.container-max-height {
+  max-height: 700px;
+}
+
+/* Logo Styles */
+.logo-large {
+  max-width: 400px;
+  max-height: 400px;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+/* Width Utilities */
+.w-auto {
+  width: auto !important;
+}
+

@@ -118,14 +118,14 @@ $presentCount = count($presentNow);
         <?php if(empty($announcements)): ?>
           <div class="alert alert-info m-3 mb-0">No announcements at this time.</div>
         <?php else: ?>
-          <div style="max-height: 700px; overflow-y: auto;">
+          <div class="scrollable-content">
             <?php foreach($announcements as $a): ?>
               <div class="p-3 border-bottom">
                 <?php if (!empty($a['image'])): ?>
                   <img src="/elog_barangay/public/<?= esc($a['image']) ?>" 
                        alt="<?= esc($a['title']) ?>" 
                        class="img-fluid rounded mb-3 w-100" 
-                       style="max-height: 200px; object-fit: cover;">
+                       class="announcement-image">
                 <?php endif; ?>
                 <div class="d-flex justify-content-between align-items-start mb-2">
                   <h6 class="mb-0 fw-bold flex-grow-1"><?= esc($a['title']) ?></h6>

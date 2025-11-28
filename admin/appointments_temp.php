@@ -114,7 +114,7 @@ require_once __DIR__ . '/../inc/header.php';
                 <img src="<?= $citizenPic ? esc('/elog_barangay/public/' . $citizenPic) : $defaultPic ?>" 
                      alt="Profile" 
                      class="rounded-circle me-2" 
-                     style="width: 40px; height: 40px; object-fit: cover;">
+                     class="profile-picture-md">
                 <span><?= esc($a['first_name'].' '.$a['last_name']) ?></span>
               </div>
             </td>

@@ -80,6 +80,15 @@ require_once __DIR__ . '/../inc/header.php';
       <input type="date" class="form-control" name="birth_date">
     </div>
     <div class="mb-3">
+      <label class="form-label">Gender <span class="text-danger">*</span></label>
+      <select class="form-select" name="gender" required>
+        <option value="">Select Gender</option>
+        <option value="Male">Male</option>
+        <option value="Female">Female</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+    <div class="mb-3">
       <label class="form-label">Contact number</label>
       <input class="form-control" name="contact_number">
     </div>

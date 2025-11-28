@@ -337,7 +337,7 @@ require_once __DIR__ . '/../inc/header.php';
         <?php if(empty($chartLabels)): ?>
           <div class="alert alert-info mb-0">No appointment data for the selected date range.</div>
         <?php else: ?>
-          <div style="height: 250px;">
+          <div class="chart-container">
             <canvas id="lineChart"></canvas>
           </div>
         <?php endif; ?>
@@ -371,7 +371,7 @@ require_once __DIR__ . '/../inc/header.php';
         <?php if(empty($pieLabels)): ?>
           <div class="alert alert-info mb-0">No appointment data for this period.</div>
         <?php else: ?>
-          <div style="height: 250px;">
+          <div class="chart-container">
             <canvas id="pieChart"></canvas>
           </div>
         <?php endif; ?>
@@ -388,7 +388,7 @@ require_once __DIR__ . '/../inc/header.php';
         <?php if(empty($appointments)): ?>
           <div class="alert alert-info">No appointments found matching your filters.</div>
         <?php else: ?>
-          <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
+          <div class="table-responsive scrollable-table">
       <table class="table table-striped table-hover align-middle">
         <thead class="table-light">
           <tr>
@@ -422,8 +422,7 @@ require_once __DIR__ . '/../inc/header.php';
                 <div class="d-flex align-items-center">
                   <img src="<?= $citizenPic ? esc('/elog_barangay/public/' . $citizenPic) : $defaultPic ?>" 
                        alt="Profile" 
-                       class="rounded-circle me-2" 
-                       style="width: 40px; height: 40px; object-fit: cover;">
+                       class="rounded-circle me-2 profile-picture-md">
                   <div>
                     <div><?= esc($a['first_name'].' '.$a['last_name']) ?></div>
                   </div>

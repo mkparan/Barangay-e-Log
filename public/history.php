@@ -151,7 +151,7 @@ $appointments = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
   <?php if(empty($appointments)): ?>
     <div class="alert alert-info">No appointments found matching your filters.</div>
   <?php else: ?>
-    <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
+    <div class="table-responsive scrollable-table">
       <table class="table table-striped table-hover align-middle">
         <thead class="table-light sticky-top">
           <tr>

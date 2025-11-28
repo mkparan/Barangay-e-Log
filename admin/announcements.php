@@ -188,7 +188,7 @@ require_once __DIR__ . '/../inc/header.php';
       <?php if(empty($ann)): ?>
         <div class="alert alert-info mb-0">No announcements yet. Create your first announcement on the left.</div>
       <?php else: ?>
-        <div class="list-group list-group-flush" style="max-height: 600px; overflow-y: auto;">
+        <div class="list-group list-group-flush scrollable-list-lg">
           <?php foreach($ann as $a): 
             $isExpired = !empty($a['expire_at']) && strtotime($a['expire_at']) < time();
             $daysRemaining = null;
@@ -201,7 +201,7 @@ require_once __DIR__ . '/../inc/header.php';
                 <img src="/elog_barangay/public/<?= esc($a['image']) ?>" 
                      alt="<?= esc($a['title']) ?>" 
                      class="img-fluid rounded mb-2 w-100" 
-                     style="max-height: 200px; object-fit: cover;">
+                     class="announcement-image">
               <?php endif; ?>
               <div class="d-flex justify-content-between align-items-start mb-2">
                 <div class="flex-grow-1">

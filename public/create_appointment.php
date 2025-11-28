@@ -323,10 +323,10 @@ foreach ($appointments as $appt) {
           <label class="form-label">Time Slot <span class="text-danger">*</span></label>
           <div class="row g-2">
             <div class="col-6">
-              <div class="card border h-100 time-slot-option" data-slot="morning" style="cursor: pointer;">
+              <div class="card border h-100 time-slot-option clickable" data-slot="morning">
                 <div class="card-body text-center">
                   <input type="radio" name="time_slot" value="morning" id="time_morning" class="form-check-input" required <?= $formDisabled ? 'disabled' : '' ?>>
-                  <label for="time_morning" class="form-check-label w-100" style="cursor: pointer;">
+                  <label for="time_morning" class="form-check-label w-100 clickable">
                     <strong class="d-block">Morning</strong>
                     <small class="text-muted">8:00 AM - 12:00 PM</small>
                     <div class="mt-2" id="morning_slots_info"></div>
@@ -335,10 +335,10 @@ foreach ($appointments as $appt) {
               </div>
             </div>
             <div class="col-6">
-              <div class="card border h-100 time-slot-option" data-slot="afternoon" style="cursor: pointer;">
+              <div class="card border h-100 time-slot-option clickable" data-slot="afternoon">
                 <div class="card-body text-center">
                   <input type="radio" name="time_slot" value="afternoon" id="time_afternoon" class="form-check-input" required <?= $formDisabled ? 'disabled' : '' ?>>
-                  <label for="time_afternoon" class="form-check-label w-100" style="cursor: pointer;">
+                  <label for="time_afternoon" class="form-check-label w-100 clickable">
                     <strong class="d-block">Afternoon</strong>
                     <small class="text-muted">1:00 PM - 5:00 PM</small>
                     <div class="mt-2" id="afternoon_slots_info"></div>

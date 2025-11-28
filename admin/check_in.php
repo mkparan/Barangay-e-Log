@@ -137,7 +137,7 @@ require_once __DIR__ . '/../inc/header.php';
       <?php if(empty($presenceLog)): ?>
         <div class="alert alert-info mb-0">No check-ins recorded for today.</div>
       <?php else: ?>
-        <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+        <div class="table-responsive scrollable-table-sm">
           <table class="table table-sm table-hover align-middle">
             <thead class="table-light sticky-top">
               <tr>

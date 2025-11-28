@@ -81,7 +81,7 @@ foreach ($appointments as $appt) {
 
 <div class="row g-4 mb-4">
   <div class="col-lg-8">
-    <div class="container-box border-primary border-2 d-flex flex-column" style="max-height: 700px;">
+    <div class="container-box border-primary border-2 d-flex flex-column container-max-height">
       <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom flex-shrink-0">
         <div>
           <h5 class="mb-0">
@@ -94,7 +94,7 @@ foreach ($appointments as $appt) {
       <?php if(empty($announcements)): ?>
         <div class="alert alert-info mb-0">No announcements at this time. Please check back later.</div>
       <?php else: ?>
-        <div class="flex-grow-1" style="overflow-y: auto;">
+        <div class="flex-grow-1 scrollable-content">
           <?php foreach($announcements as $a): 
             $bodyPreview = strlen($a['body']) > 200 ? substr($a['body'], 0, 200) . '...' : $a['body'];
           ?>
@@ -103,7 +103,7 @@ foreach ($appointments as $appt) {
                 <img src="/elog_barangay/public/<?= esc($a['image']) ?>" 
                      alt="<?= esc($a['title']) ?>" 
                      class="img-fluid rounded mb-3 w-100" 
-                     style="max-height: 200px; object-fit: cover; cursor: pointer;"
+                     class="announcement-image clickable"
                      data-bs-toggle="modal"
                      data-bs-target="#announcementModal<?= $a['announcement_id'] ?>">
               <?php endif; ?>
@@ -136,11 +136,11 @@ foreach ($appointments as $appt) {
                           <img src="/elog_barangay/public/<?= esc($a['image']) ?>" 
                                alt="<?= esc($a['title']) ?>" 
                                class="img-fluid rounded w-100" 
-                               style="max-height: 400px; object-fit: contain;">
+                               class="announcement-image-modal">
                         </div>
                       <?php endif; ?>
                       <div class="announcement-body">
-                        <p class="mb-0" style="white-space: pre-wrap;"><?= nl2br(esc($a['body'])) ?></p>
+                        <p class="mb-0 preserve-whitespace"><?= nl2br(esc($a['body'])) ?></p>
                       </div>
                     </div>
                     <div class="modal-footer">

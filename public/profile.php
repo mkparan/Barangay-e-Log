@@ -138,8 +138,8 @@ require_once __DIR__ . '/../inc/header.php';
             <img id="profileImagePreview" src="<?= $profilePic ? esc('/elog_barangay/public/' . $profilePic) : $defaultPic ?>" 
                  alt="Profile Picture" 
                  class="rounded-circle border" 
-                 style="width: 150px; height: 150px; object-fit: cover; border-width: 3px !important;">
-            <div id="uploadOverlay" class="position-absolute top-0 start-0 w-100 h-100 rounded-circle d-none align-items-center justify-content-center" style="background: rgba(0,0,0,0.7);">
+                 class="profile-picture-xl">
+            <div id="uploadOverlay" class="position-absolute top-0 start-0 w-100 h-100 rounded-circle d-none align-items-center justify-content-center upload-overlay">
               <div class="text-white text-center">
                 <div class="spinner-border spinner-border-sm mb-2" role="status"></div>
                 <div class="small">Uploading...</div>
@@ -222,7 +222,7 @@ require_once __DIR__ . '/../inc/header.php';
       <img src="<?= $profilePic ? esc('/elog_barangay/public/' . $profilePic) : $defaultPic ?>" 
            alt="Profile Picture" 
            class="rounded-circle border mb-3" 
-           style="width: 120px; height: 120px; object-fit: cover; border-width: 3px !important;">
+           class="profile-picture-lg">
       <h5 class="mb-1"><?= esc(trim(($profile['first_name'] ?? '') . ' ' . ($profile['middle_name'] ?? '') . ' ' . ($profile['last_name'] ?? ''))) ?></h5>
       <p class="text-muted small mb-0"><?= esc($profile['cin']) ?></p>
     </div>

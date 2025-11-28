@@ -538,7 +538,7 @@ if ($pendingStmt) {
       <?php if(empty($appointmentHistory)): ?>
         <div class="alert alert-light border mb-0">No appointment history yet.</div>
       <?php else: ?>
-        <div class="list-group list-group-flush" style="max-height: 400px; overflow-y: auto;">
+        <div class="list-group list-group-flush scrollable-list">
           <?php foreach($appointmentHistory as $item): 
             $citizenPic = !empty($item['profile_picture']) ? $item['profile_picture'] : null;
             $defaultPic = 'data:image/svg+xml;base64,' . base64_encode('<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#dee2e6"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="18" fill="#6c757d">' . strtoupper(substr($item['first_name'] ?? 'U', 0, 1)) . '</text></svg>');
@@ -555,8 +555,7 @@ if ($pendingStmt) {
               <div class="d-flex align-items-start gap-2">
                 <img src="<?= $citizenPic ? esc('/elog_barangay/public/' . $citizenPic) : $defaultPic ?>" 
                      alt="Profile" 
-                     class="rounded-circle mt-1" 
-                     style="width: 32px; height: 32px; object-fit: cover; flex-shrink: 0;">
+                     class="rounded-circle mt-1 profile-picture-sm flex-shrink-0">
                 <div class="flex-grow-1">
                   <div class="d-flex justify-content-between align-items-start mb-1">
                     <div>
@@ -593,7 +592,7 @@ if ($pendingStmt) {
       <?php if(empty($pendingAppointmentsRows)): ?>
         <div class="alert alert-info mb-0">No pending appointments.</div>
   <?php else: ?>
-        <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+        <div class="table-responsive scrollable-table-sm">
           <table class="table table-sm table-hover align-middle mb-0">
             <thead class="table-light sticky-top">
               <tr>
@@ -615,7 +614,7 @@ if ($pendingStmt) {
                       <img src="<?= $citizenPic ? esc('/elog_barangay/public/' . $citizenPic) : $defaultPic ?>" 
                            alt="Profile" 
                            class="rounded-circle me-2" 
-                           style="width: 32px; height: 32px; object-fit: cover;">
+                           class="profile-picture-sm">
                       <span><?= esc($p['first_name'].' '.$p['last_name']) ?></span>
                     </div>
                   </td>
