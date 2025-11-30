@@ -129,6 +129,15 @@ $page_title = "Walk-In Kiosk - Barangay e-Log";
     width: 100%;
 }
 
+.kiosk-logo {
+    max-width: 300px;
+    max-height: 250px;
+    width: auto;
+    height: auto;
+    margin-bottom: 1rem;
+    object-fit: contain;
+}
+
 .kiosk-title {
     font-size: 2.5rem;
     font-weight: bold;
@@ -412,10 +421,13 @@ $page_title = "Walk-In Kiosk - Barangay e-Log";
 
 <div class="kiosk-container">
     <div class="kiosk-card">
-        <h1 class="kiosk-title">
+        <div class="text-center mb-4">
+            <img src="/elog_barangay/public/assets/images/logo.png" alt="Barangay Logo" class="kiosk-logo">
+        </div>
+        <h1 class="kiosk-title text-center">
             <i class="bi bi-building me-2"></i>Walk-In Kiosk
         </h1>
-        <p class="kiosk-subtitle">Please fill out the form below to register your visit</p>
+        <p class="kiosk-subtitle text-center">Please fill out the form below to register your visit</p>
         
         <?php if ($success): ?>
             <div class="kiosk-alert kiosk-success">
