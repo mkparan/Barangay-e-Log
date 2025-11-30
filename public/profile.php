@@ -73,7 +73,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_picture']) && 
     }
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['upload_picture'])) {
+// Handle profile update (separate from password change)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['upload_picture']) && isset($_POST['update_profile'])) {
     $first = trim($_POST['first_name'] ?? '');
     $middle = trim($_POST['middle_name'] ?? '');
     $last = trim($_POST['last_name'] ?? '');
@@ -98,6 +99,84 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['upload_picture'])) {
             $profile = $stmt->get_result()->fetch_assoc();
         } else {
             $errors[] = "DB Error: " . $upd->error;
+        }
+    }
+}
+
+// Handle password change (separate from profile update)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['change_password'])) {
+    $currentPassword = $_POST['current_password'] ?? '';
+    $newPassword = $_POST['new_password'] ?? '';
+    $confirmPassword = $_POST['confirm_password'] ?? '';
+    
+    // Check if password_hash column exists, if not add it
+    $checkColumn = $db->query("SHOW COLUMNS FROM citizens LIKE 'password_hash'");
+    if ($checkColumn->num_rows == 0) {
+        $db->query("ALTER TABLE citizens ADD COLUMN password_hash VARCHAR(255) NULL AFTER email");
+    }
+    
+    // First, verify current password
+    if (empty($currentPassword)) {
+        $errors[] = "Current password is required to change your password.";
+    } elseif (empty($newPassword)) {
+        $errors[] = "New password is required.";
+    } else {
+        // Get current password hash from database
+        $checkStmt = $db->prepare("SELECT password_hash FROM citizens WHERE citizen_id = ?");
+        $checkStmt->bind_param('i', $citizen['citizen_id']);
+        $checkStmt->execute();
+        $checkResult = $checkStmt->get_result();
+        
+        if ($checkRow = $checkResult->fetch_assoc()) {
+            // If no password is set, allow setting one without current password verification
+            if (empty($checkRow['password_hash'])) {
+                if (strlen($newPassword) < 8) {
+                    $errors[] = "New password must be at least 8 characters long.";
+                } elseif ($newPassword !== $confirmPassword) {
+                    $errors[] = "New passwords do not match.";
+                } else {
+                    $hash = password_hash($newPassword, PASSWORD_DEFAULT);
+                    $updPass = $db->prepare("UPDATE citizens SET password_hash=? WHERE citizen_id=?");
+                    $updPass->bind_param('si', $hash, $citizen['citizen_id']);
+                    if ($updPass->execute()) {
+                        audit_log($citizen['cin'], null, 'password_change', 'citizens', $citizen['citizen_id']);
+                        $success = true;
+                        // Clear password fields on success
+                        $_POST['current_password'] = '';
+                        $_POST['new_password'] = '';
+                        $_POST['confirm_password'] = '';
+                    } else {
+                        $errors[] = "DB Error: " . $updPass->error;
+                    }
+                }
+            } elseif (!password_verify($currentPassword, $checkRow['password_hash'])) {
+                $errors[] = "Current password is incorrect.";
+            } elseif (strlen($newPassword) < 8) {
+                $errors[] = "New password must be at least 8 characters long.";
+            } elseif ($newPassword !== $confirmPassword) {
+                $errors[] = "New passwords do not match.";
+            } else {
+                // Verify new password is different from current password
+                if (password_verify($newPassword, $checkRow['password_hash'])) {
+                    $errors[] = "New password must be different from your current password.";
+                } else {
+                    $hash = password_hash($newPassword, PASSWORD_DEFAULT);
+                    $updPass = $db->prepare("UPDATE citizens SET password_hash=? WHERE citizen_id=?");
+                    $updPass->bind_param('si', $hash, $citizen['citizen_id']);
+                    if ($updPass->execute()) {
+                        audit_log($citizen['cin'], null, 'password_change', 'citizens', $citizen['citizen_id']);
+                        $success = true;
+                        // Clear password fields on success
+                        $_POST['current_password'] = '';
+                        $_POST['new_password'] = '';
+                        $_POST['confirm_password'] = '';
+                    } else {
+                        $errors[] = "DB Error: " . $updPass->error;
+                    }
+                }
+            }
+        } else {
+            $errors[] = "Unable to verify current password. Please try again.";
         }
     }
 }
@@ -137,8 +216,7 @@ require_once __DIR__ . '/../inc/header.php';
             ?>
             <img id="profileImagePreview" src="<?= $profilePic ? esc('/elog_barangay/public/' . $profilePic) : $defaultPic ?>" 
                  alt="Profile Picture" 
-                 class="rounded-circle border" 
-                 class="profile-picture-xl">
+                 class="rounded-circle border profile-picture-xl">
             <div id="uploadOverlay" class="position-absolute top-0 start-0 w-100 h-100 rounded-circle d-none align-items-center justify-content-center upload-overlay">
               <div class="text-white text-center">
                 <div class="spinner-border spinner-border-sm mb-2" role="status"></div>
@@ -158,6 +236,7 @@ require_once __DIR__ . '/../inc/header.php';
       </div>
       
       <form method="post">
+        <input type="hidden" name="update_profile" value="1">
         <div class="row g-3">
           <div class="col-md-4">
             <label class="form-label">Barangay ID</label>
@@ -206,8 +285,51 @@ require_once __DIR__ . '/../inc/header.php';
             <textarea name="gov_affiliations" class="form-control" rows="2" placeholder="List any government affiliations or memberships"><?= esc($profile['gov_affiliations'] ?? '') ?></textarea>
           </div>
         </div>
+        
         <div class="mt-4">
           <button type="submit" class="btn btn-primary">Update Profile</button>
+        </div>
+      </form>
+      
+      <hr class="my-4">
+      
+      <form method="post">
+        <input type="hidden" name="change_password" value="1">
+        <h5 class="mb-3">Change Password</h5>
+        <div class="row g-3">
+          <div class="col-md-12">
+            <label class="form-label">Current Password <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <input type="password" name="current_password" class="form-control" placeholder="Enter your current password" id="current_password" value="">
+              <button class="btn btn-outline-secondary" type="button" id="toggleCurrentPassword">
+                <i class="bi bi-eye" id="currentPasswordIcon"></i>
+              </button>
+            </div>
+            <small class="text-muted"><?= empty($profile['password_hash']) ? 'No password set yet. Leave this blank to set your first password.' : 'Required to change your password' ?></small>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">New Password <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <input type="password" name="new_password" class="form-control" placeholder="Enter new password" id="new_password" value="">
+              <button class="btn btn-outline-secondary" type="button" id="toggleNewPassword">
+                <i class="bi bi-eye" id="newPasswordIcon"></i>
+              </button>
+            </div>
+            <small class="text-muted">Minimum 8 characters</small>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Confirm New Password <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <input type="password" name="confirm_password" class="form-control" placeholder="Confirm new password" id="confirm_password" value="">
+              <button class="btn btn-outline-secondary" type="button" id="toggleConfirmPassword">
+                <i class="bi bi-eye" id="confirmPasswordIcon"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <div class="mt-4">
+          <button type="submit" class="btn btn-warning">Change Password</button>
         </div>
       </form>
     </div>
@@ -221,8 +343,7 @@ require_once __DIR__ . '/../inc/header.php';
       ?>
       <img src="<?= $profilePic ? esc('/elog_barangay/public/' . $profilePic) : $defaultPic ?>" 
            alt="Profile Picture" 
-           class="rounded-circle border mb-3" 
-           class="profile-picture-lg">
+           class="rounded-circle border mb-3 profile-picture-lg">
       <h5 class="mb-1"><?= esc(trim(($profile['first_name'] ?? '') . ' ' . ($profile['middle_name'] ?? '') . ' ' . ($profile['last_name'] ?? ''))) ?></h5>
       <p class="text-muted small mb-0"><?= esc($profile['cin']) ?></p>
     </div>
@@ -294,6 +415,32 @@ document.addEventListener('DOMContentLoaded', function() {
       uploadForm.submit();
     });
   }
+  
+  // Password toggle functionality
+  function setupPasswordToggle(toggleBtnId, passwordInputId, iconId) {
+    const toggleBtn = document.getElementById(toggleBtnId);
+    const passwordInput = document.getElementById(passwordInputId);
+    const passwordIcon = document.getElementById(iconId);
+    
+    if (toggleBtn && passwordInput && passwordIcon) {
+      toggleBtn.addEventListener('click', function() {
+        if (passwordInput.type === 'password') {
+          passwordInput.type = 'text';
+          passwordIcon.classList.remove('bi-eye');
+          passwordIcon.classList.add('bi-eye-slash');
+        } else {
+          passwordInput.type = 'password';
+          passwordIcon.classList.remove('bi-eye-slash');
+          passwordIcon.classList.add('bi-eye');
+        }
+      });
+    }
+  }
+  
+  // Setup toggles for all password fields
+  setupPasswordToggle('toggleCurrentPassword', 'current_password', 'currentPasswordIcon');
+  setupPasswordToggle('toggleNewPassword', 'new_password', 'newPasswordIcon');
+  setupPasswordToggle('toggleConfirmPassword', 'confirm_password', 'confirmPasswordIcon');
 });
 </script>
 

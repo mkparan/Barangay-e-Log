@@ -41,6 +41,28 @@ if (isset($_GET['action'])) {
             $stmt->execute();
             audit_log($_SESSION['user']['username'], $_SESSION['user']['user_id'], 'citizen_unbanned', 'citizens', $id);
             $success = "Citizen account unbanned.";
+        } elseif ($action === 'reset_password') {
+            // Generate a temporary password
+            $tempPassword = bin2hex(random_bytes(8)); // 16 character random password
+            $passwordHash = password_hash($tempPassword, PASSWORD_DEFAULT);
+            
+            // Check if password_hash column exists, if not add it
+            $checkColumn = $db->query("SHOW COLUMNS FROM citizens LIKE 'password_hash'");
+            if ($checkColumn->num_rows == 0) {
+                $db->query("ALTER TABLE citizens ADD COLUMN password_hash VARCHAR(255) NULL AFTER email");
+            }
+            
+            // Update the citizen's password
+            $stmt = $db->prepare("UPDATE citizens SET password_hash = ? WHERE citizen_id = ?");
+            $stmt->bind_param('si', $passwordHash, $id);
+            if ($stmt->execute()) {
+                audit_log($_SESSION['user']['username'], $_SESSION['user']['user_id'], 'citizen_password_reset', 'citizens', $id);
+                // Store password in session to display with HTML
+                $_SESSION['password_reset_temp'] = $tempPassword;
+                $success = "Password reset successfully.";
+            } else {
+                $errors[] = "Failed to reset password: " . $stmt->error;
+            }
         }
         
         if ($success) {
@@ -120,6 +142,13 @@ require_once __DIR__ . '/../inc/header.php';
   <?php if(!empty($_GET['msg'])): ?>
     <div class="alert alert-success alert-dismissible fade show">
       <?= esc($_GET['msg']) ?>
+      <?php if(!empty($_SESSION['password_reset_temp'])): ?>
+        <br><br>
+        <strong>New temporary password: <code><?= htmlspecialchars($_SESSION['password_reset_temp']) ?></code></strong>
+        <br>
+        <small class="text-muted">Please inform the citizen to change this password after login.</small>
+        <?php unset($_SESSION['password_reset_temp']); ?>
+      <?php endif; ?>
       <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
   <?php endif; ?>
@@ -268,6 +297,13 @@ require_once __DIR__ . '/../inc/header.php';
                       <i class="bi bi-check-circle"></i>
                     </a>
                   <?php endif; ?>
+                  
+                  <a href="?action=reset_password&id=<?= $c['citizen_id'] ?><?= $search ? '&search=' . urlencode($search) : '' ?>" 
+                     class="btn btn-warning"
+                     title="Reset Password"
+                     onclick="return confirm('Reset password for this citizen? A temporary password will be generated.')">
+                    <i class="bi bi-key"></i>
+                  </a>
                 </div>
               </td>
             </tr>

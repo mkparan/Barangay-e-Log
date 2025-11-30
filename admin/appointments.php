@@ -66,12 +66,19 @@ $dateFilter = $_GET['date_filter'] ?? ''; // today, upcoming, past
 $dateFrom = $_GET['date_from'] ?? '';
 $dateTo = $_GET['date_to'] ?? '';
 $today = date('Y-m-d');
-$where = "1";
+// Default: only show unprocessed appointments (pending, approved, rescheduled)
+// Exclude completed, declined, and cancelled - these should only appear in history
+$where = "a.status IN ('pending', 'approved', 'rescheduled')";
 
 if ($filter === 'pending') $where = "a.status='pending'";
 if ($filter === 'approved') $where = "a.status='approved'";
-if ($filter === 'declined') $where = "a.status='declined'";
-if ($filter === 'completed') $where = "a.status='completed'";
+if ($filter === 'rescheduled') $where = "a.status='rescheduled'";
+// Note: declined, completed, and cancelled are not available as filters here
+// They can only be viewed in history
+if ($filter === 'all') {
+    // Even "all" should exclude completed/declined/cancelled
+    $where = "a.status IN ('pending', 'approved', 'rescheduled')";
+}
 
 if ($serviceFilter) {
     $where .= " AND a.service_type = ?";

@@ -184,8 +184,7 @@ require_once __DIR__ . '/../inc/header.php';
             ?>
             <img id="profileImagePreview" src="<?= $profilePic ? esc('/elog_barangay/public/' . $profilePic) : $defaultPic ?>" 
                  alt="Profile Picture" 
-                 class="rounded-circle border" 
-                 class="profile-picture-xl">
+                 class="rounded-circle border profile-picture-xl">
             <div id="uploadOverlay" class="position-absolute top-0 start-0 w-100 h-100 rounded-circle d-none align-items-center justify-content-center upload-overlay">
               <div class="text-white text-center">
                 <div class="spinner-border spinner-border-sm mb-2" role="status"></div>
@@ -288,8 +287,7 @@ require_once __DIR__ . '/../inc/header.php';
       ?>
       <img src="<?= $profilePic ? esc('/elog_barangay/public/' . $profilePic) : $defaultPic ?>" 
            alt="Profile Picture" 
-           class="rounded-circle border mb-3" 
-           class="profile-picture-lg">
+           class="rounded-circle border mb-3 profile-picture-lg">
       <h5 class="mb-1"><?= esc($profile['full_name']) ?></h5>
       <p class="text-muted small mb-0"><?= esc(ucfirst($profile['role'])) ?></p>
     </div>

@@ -236,6 +236,21 @@ $db = db_connect();
           </div>
         </div>
         
+        <div class="accordion-item">
+          <h2 class="accordion-header">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq10">
+              What if I forget my password?
+            </button>
+          </h2>
+          <div id="faq10" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+            <div class="accordion-body">
+              If you forget your password, please visit the barangay hall in person to reset it. Bring any of the following for verification: 
+              a valid government-issued ID, proof of residence, or your Barangay ID. Our staff will assist you in resetting your password. 
+              You can also click the "Forgot Password?" button on the login page for more information.
+            </div>
+          </div>
+        </div>
+        
       </div>
     </div>
   </div>

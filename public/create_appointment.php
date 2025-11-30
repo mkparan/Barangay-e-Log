@@ -58,6 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     
     $service = $_POST['service_type'] ?? '';
+    $otherReason = trim($_POST['other_reason'] ?? '');
     $preferred_date = $_POST['preferred_date'] ?? null;
     $time_slot = $_POST['time_slot'] ?? null;
     $details = $_POST['details'] ?? '';
@@ -66,6 +67,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['appointment_errors'] = ["Service, date, and time slot (morning/afternoon) are required."];
         header('Location: create_appointment.php');
         exit;
+    }
+    
+    // If service is "Others", require the reason
+    if ($service === 'Others' && empty($otherReason)) {
+        $_SESSION['appointment_errors'] = ["Please specify the reason for your appointment."];
+        header('Location: create_appointment.php');
+        exit;
+    }
+    
+    // Update service display if "Others" is selected
+    if ($service === 'Others') {
+        $service = 'Others: ' . $otherReason;
+        if (empty($details)) {
+            $details = 'Other reason: ' . $otherReason;
+        }
     }
     
     // Validate that preferred_date is not before today
@@ -150,7 +166,7 @@ require_once __DIR__ . '/../inc/header.php';
 
 $services = [
   'Barangay Clearance','Certificate of Residency','Certificate of Indigency','Purok Clearance','Barangay Clearance Recommendation',
-  'Certificate of No Issuance','Barangay Business Permit','Complaint Blotter','Settlement/Mediation Certification','Cedula','Certificate of Tribal Membership'
+  'Certificate of No Issuance','Barangay Business Permit','Complaint Blotter','Settlement/Mediation Certification','Cedula','Certificate of Tribal Membership','Others'
 ];
 
 $service_requirements = [
@@ -208,6 +224,11 @@ $service_requirements = [
         'Valid ID',
         'Certification from tribal chieftain/elder',
         'Two community witnesses (if required)'
+    ],
+    'Others' => [
+        'Valid ID',
+        'Barangay ID (if available)',
+        'Any relevant documents for your request'
     ]
 ];
 
@@ -291,12 +312,16 @@ foreach ($appointments as $appt) {
       <form method="post" <?= $formDisabled ? 'onsubmit="event.preventDefault(); alert(\'Your account must be verified before you can book appointments. Please visit the barangay hall.\'); return false;"' : '' ?>>
         <div class="mb-3">
           <label class="form-label">Service</label>
-          <select name="service_type" class="form-select" required <?= $formDisabled ? 'disabled' : '' ?>>
+          <select name="service_type" id="service_type_select" class="form-select" required <?= $formDisabled ? 'disabled' : '' ?>>
             <option value="">-- choose --</option>
             <?php foreach($services as $s): ?>
               <option value="<?= esc($s) ?>"><?= esc($s) ?></option>
             <?php endforeach; ?>
           </select>
+        </div>
+        <div class="mb-3" id="otherReasonGroup" style="display: none;">
+          <label class="form-label">Please specify your reason <span class="text-danger">*</span></label>
+          <textarea name="other_reason" id="other_reason" class="form-control" rows="3" placeholder="Please describe the reason for your appointment..." <?= $formDisabled ? 'disabled' : '' ?>></textarea>
         </div>
         <div id="requirementsPanel" class="alert alert-info d-none">
           <div class="d-flex justify-content-between align-items-center mb-2">
@@ -468,6 +493,29 @@ document.addEventListener('DOMContentLoaded', function() {
 
   serviceSelect.addEventListener('change', renderRequirements);
   renderRequirements();
+  
+  // Handle "Others" option
+  const otherReasonGroup = document.getElementById('otherReasonGroup');
+  const otherReasonInput = document.getElementById('other_reason');
+  const serviceTypeSelect = document.getElementById('service_type_select');
+  
+  function toggleOtherReason() {
+    if (serviceTypeSelect && serviceTypeSelect.value === 'Others') {
+      if (otherReasonGroup) otherReasonGroup.style.display = 'block';
+      if (otherReasonInput) otherReasonInput.setAttribute('required', 'required');
+    } else {
+      if (otherReasonGroup) otherReasonGroup.style.display = 'none';
+      if (otherReasonInput) {
+        otherReasonInput.removeAttribute('required');
+        otherReasonInput.value = '';
+      }
+    }
+  }
+  
+  if (serviceTypeSelect) {
+    serviceTypeSelect.addEventListener('change', toggleOtherReason);
+    toggleOtherReason(); // Check on page load
+  }
   
   // Available dates data
   var availableDates = <?= json_encode($availableDatesArray, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;

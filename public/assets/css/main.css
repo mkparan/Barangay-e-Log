@@ -232,6 +232,8 @@ body {
   height: 120px;
   min-width: 120px;
   min-height: 120px;
+  max-width: 120px;
+  max-height: 120px;
   object-fit: cover;
   border-radius: 50%;
   border-width: 3px !important;
@@ -243,6 +245,8 @@ body {
   height: 150px;
   min-width: 150px;
   min-height: 150px;
+  max-width: 150px;
+  max-height: 150px;
   object-fit: cover;
   border-radius: 50%;
   border-width: 3px !important;

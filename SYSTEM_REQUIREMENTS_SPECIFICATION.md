@@ -94,8 +94,12 @@ Traditional barangay operations face several challenges:
 ### c. Scope and Limitations
 
 **In Scope:**
-- Citizen registration and account management
+- Citizen registration and account management (with password)
+- Password-based authentication for citizens
+- Password reset functionality
 - Online appointment booking and management
+- Walk-in kiosk system (touch-friendly interface)
+- Appointment type tracking (Walk-In vs Appointment)
 - Announcement publishing and viewing
 - Official attendance tracking (check-in/check-out)
 - Duty roster management
@@ -103,6 +107,8 @@ Traditional barangay operations face several challenges:
 - Transaction logging
 - Analytics and reporting
 - Audit logging
+- Advanced search and filtering
+- Appointment detail viewing
 
 **Out of Scope:**
 - Payment processing integration
@@ -239,18 +245,22 @@ The proposed system addresses all identified problems:
 
 | ID | Requirement | Priority |
 |----|-------------|----------|
-| FR1 | System shall allow citizens to register with CIN | High |
+| FR1 | System shall allow citizens to register with CIN and password | High |
 | FR2 | System shall require citizen verification before appointment booking | High |
 | FR3 | System shall allow citizens to book appointments online | High |
-| FR4 | System shall allow officials to approve/decline/reschedule appointments | High |
-| FR5 | System shall assign queue numbers to approved appointments | Medium |
-| FR6 | System shall allow officials to check-in/check-out | High |
-| FR7 | System shall display present officials on public homepage | Medium |
-| FR8 | System shall allow admin to publish announcements | High |
-| FR9 | System shall allow citizens to view announcements | High |
-| FR10 | System shall generate analytics and reports | Medium |
-| FR11 | System shall log all user activities | High |
-| FR12 | System shall manage user roles and permissions | High |
+| FR4 | System shall allow walk-in registration via kiosk interface | High |
+| FR5 | System shall allow officials to approve/decline/reschedule appointments | High |
+| FR6 | System shall assign queue numbers to approved appointments | Medium |
+| FR7 | System shall allow officials to check-in/check-out | High |
+| FR8 | System shall display present officials on public homepage | Medium |
+| FR9 | System shall allow admin to publish announcements | High |
+| FR10 | System shall allow citizens to view announcements | High |
+| FR11 | System shall support password reset for citizens | High |
+| FR12 | System shall distinguish between walk-in and regular appointments | Medium |
+| FR13 | System shall provide advanced search (name, phone, Barangay ID) | Medium |
+| FR14 | System shall generate analytics and reports | Medium |
+| FR15 | System shall log all user activities | High |
+| FR16 | System shall manage user roles and permissions | High |
 
 **b) Non-Functional Requirements**
 
@@ -263,9 +273,11 @@ The proposed system addresses all identified problems:
 | NFR5 | System shall prevent XSS attacks | High |
 | NFR6 | System shall be accessible via web browsers | High |
 | NFR7 | System shall be responsive on mobile devices | Medium |
-| NFR8 | System shall maintain 99% uptime | Medium |
-| NFR9 | System shall backup data daily | High |
-| NFR10 | System shall provide audit trail for all actions | High |
+| NFR8 | System shall support touch screen devices with on-screen keyboard | Medium |
+| NFR9 | System shall automatically detect touch vs mouse/keyboard input | Medium |
+| NFR10 | System shall maintain 99% uptime | Medium |
+| NFR11 | System shall backup data daily | High |
+| NFR12 | System shall provide audit trail for all actions | High |
 
 #### 3. Possible System Requirements
 

@@ -35,7 +35,7 @@ $declinedAppointments = (int)($db->query("SELECT COUNT(*) AS c FROM appointments
 $cancelledAppointments = (int)($db->query("SELECT COUNT(*) AS c FROM appointments WHERE status='cancelled'")->fetch_assoc()['c'] ?? 0);
 
 $today = date('Y-m-d');
-$todayScheduledStmt = $db->prepare("SELECT COUNT(*) AS c FROM appointments WHERE preferred_date = ?");
+$todayScheduledStmt = $db->prepare("SELECT COUNT(*) AS c FROM appointments WHERE preferred_date = ? AND status NOT IN ('declined', 'completed', 'cancelled')");
 $todayScheduledStmt->bind_param('s', $today);
 $todayScheduledStmt->execute();
 $todayScheduled = (int)($todayScheduledStmt->get_result()->fetch_assoc()['c'] ?? 0);
@@ -192,16 +192,34 @@ for ($i = $monthsToShow - 1; $i >= 0; $i--) {
     $chartLabels[] = date('M Y', strtotime($key . '-01'));
 }
 $appointmentsMap = array_fill_keys($monthKeys, 0);
+$walkinsMap = array_fill_keys($monthKeys, 0);
 $processedMap = array_fill_keys($monthKeys, 0);
 $chartStart = $monthKeys[0] . '-01';
 
-$monthlyApptStmt = $db->prepare("SELECT DATE_FORMAT(created_at, '%Y-%m') AS ym, COUNT(*) AS total FROM appointments WHERE created_at >= ? GROUP BY ym");
+$monthlyApptStmt = $db->prepare("SELECT DATE_FORMAT(a.created_at, '%Y-%m') AS ym, COUNT(*) AS total FROM appointments a WHERE a.created_at >= ? GROUP BY ym");
 $monthlyApptStmt->bind_param('s', $chartStart);
 $monthlyApptStmt->execute();
 $monthlyApptResult = $monthlyApptStmt->get_result()->fetch_all(MYSQLI_ASSOC);
 foreach ($monthlyApptResult as $row) {
     if (isset($appointmentsMap[$row['ym']])) {
         $appointmentsMap[$row['ym']] = (int)$row['total'];
+    }
+}
+
+// Get walk-ins separately
+$monthlyWalkinsStmt = $db->prepare("
+    SELECT DATE_FORMAT(a.created_at, '%Y-%m') AS ym, COUNT(*) AS total 
+    FROM appointments a 
+    JOIN citizens c ON a.citizen_id = c.citizen_id 
+    WHERE a.created_at >= ? AND c.cin LIKE 'WALKIN-%' 
+    GROUP BY ym
+");
+$monthlyWalkinsStmt->bind_param('s', $chartStart);
+$monthlyWalkinsStmt->execute();
+$monthlyWalkinsResult = $monthlyWalkinsStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+foreach ($monthlyWalkinsResult as $row) {
+    if (isset($walkinsMap[$row['ym']])) {
+        $walkinsMap[$row['ym']] = (int)$row['total'];
     }
 }
 
@@ -218,6 +236,7 @@ foreach ($monthlyProcessedResult as $row) {
 $chartPayload = [
     'labels' => $chartLabels,
     'appointments' => array_values($appointmentsMap),
+    'walkins' => array_values($walkinsMap),
     'processed' => array_values($processedMap),
 ];
 
@@ -738,6 +757,15 @@ if ($pendingStmt) {
           data: chartPayload.appointments,
           borderColor: '#0d6efd',
           backgroundColor: 'rgba(13,110,253,0.2)',
+          tension: 0.3,
+          fill: true,
+          borderWidth: 2
+        },
+        {
+          label: 'Walk-ins',
+          data: chartPayload.walkins,
+          borderColor: '#ffc107',
+          backgroundColor: 'rgba(255,193,7,0.2)',
           tension: 0.3,
           fill: true,
           borderWidth: 2

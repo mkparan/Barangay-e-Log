@@ -14,7 +14,8 @@ $filter_date_from = $_GET['date_from'] ?? '';
 $filter_date_to = $_GET['date_to'] ?? '';
 $filter_service = $_GET['service'] ?? '';
 $filter_status = $_GET['status'] ?? '';
-$search_barangay_id = trim($_GET['search_barangay_id'] ?? '');
+$filter_walkin = $_GET['walkin'] ?? ''; // 'yes' or 'no'
+$search = trim($_GET['search'] ?? '');
 
 // Build query with filters
 $where = "1";
@@ -45,10 +46,29 @@ if ($filter_status) {
     $types .= 's';
 }
 
-if ($search_barangay_id) {
-    $where .= " AND c.cin LIKE ?";
-    $params[] = "%{$search_barangay_id}%";
-    $types .= 's';
+// Walk-in filter
+if ($filter_walkin === 'yes') {
+    $where .= " AND c.cin LIKE 'WALKIN-%'";
+} elseif ($filter_walkin === 'no') {
+    $where .= " AND (c.cin NOT LIKE 'WALKIN-%' OR c.cin IS NULL)";
+}
+
+// Unified search (case-insensitive) - searches Barangay ID, name, and phone
+if ($search) {
+    $where .= " AND (
+        LOWER(c.cin) LIKE LOWER(?) OR 
+        LOWER(c.first_name) LIKE LOWER(?) OR 
+        LOWER(c.last_name) LIKE LOWER(?) OR 
+        LOWER(CONCAT(c.first_name, ' ', c.last_name)) LIKE LOWER(?) OR
+        c.contact_number LIKE ?
+    )";
+    $searchTerm = "%{$search}%";
+    $params[] = $searchTerm;
+    $params[] = $searchTerm;
+    $params[] = $searchTerm;
+    $params[] = $searchTerm;
+    $params[] = $searchTerm;
+    $types .= 'sssss';
 }
 
 // Pagination - must be before query execution
@@ -97,9 +117,17 @@ $sql = "
         u.full_name AS official_name,
         p.full_name AS processed_by_name,
         c.first_name,
+        c.middle_name,
         c.last_name,
         c.cin,
-        c.profile_picture
+        c.contact_number,
+        c.email,
+        c.address,
+        c.profile_picture,
+        CASE 
+            WHEN c.cin LIKE 'WALKIN-%' THEN 'Walk-In'
+            ELSE 'Appointment'
+        END AS appointment_type
     FROM appointments a
     LEFT JOIN users u ON a.official_id = u.user_id
     LEFT JOIN users p ON a.processed_by = p.user_id
@@ -157,23 +185,42 @@ if ($daysDiff > 90) {
 $chartStartDate = $chart_date_from;
 $chartEndDate = $chart_date_to;
 $chartStmt = $db->prepare("
-    SELECT DATE(created_at) AS date, COUNT(*) AS total 
-    FROM appointments 
-    WHERE DATE(created_at) >= ? AND DATE(created_at) <= ?
-    GROUP BY DATE(created_at)
+    SELECT DATE(a.created_at) AS date, COUNT(*) AS total 
+    FROM appointments a
+    WHERE DATE(a.created_at) >= ? AND DATE(a.created_at) <= ?
+    GROUP BY DATE(a.created_at)
     ORDER BY date ASC
 ");
 $chartStmt->bind_param('ss', $chartStartDate, $chartEndDate);
 $chartStmt->execute();
 $chartData = $chartStmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
+// Get walk-ins separately
+$chartWalkinsStmt = $db->prepare("
+    SELECT DATE(a.created_at) AS date, COUNT(*) AS total 
+    FROM appointments a
+    JOIN citizens c ON a.citizen_id = c.citizen_id
+    WHERE DATE(a.created_at) >= ? AND DATE(a.created_at) <= ? AND c.cin LIKE 'WALKIN-%'
+    GROUP BY DATE(a.created_at)
+    ORDER BY date ASC
+");
+$chartWalkinsStmt->bind_param('ss', $chartStartDate, $chartEndDate);
+$chartWalkinsStmt->execute();
+$chartWalkinsData = $chartWalkinsStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
 // Create date range for chart (limit to 90 days max, use daily or weekly grouping)
 $chartLabels = [];
 $chartValues = [];
+$chartWalkinsValues = [];
 $chartDataMap = [];
+$chartWalkinsMap = [];
 
 foreach ($chartData as $row) {
     $chartDataMap[$row['date']] = (int)$row['total'];
+}
+
+foreach ($chartWalkinsData as $row) {
+    $chartWalkinsMap[$row['date']] = (int)$row['total'];
 }
 
 // If range is large, group by week; otherwise daily
@@ -187,15 +234,18 @@ if ($daysDiff > 30) {
         if ($weekEnd > $endDate) $weekEnd = clone $endDate;
         
         $weekTotal = 0;
+        $weekWalkinsTotal = 0;
         $checkDate = clone $current;
         while ($checkDate <= $weekEnd) {
             $dateStr = $checkDate->format('Y-m-d');
             $weekTotal += $chartDataMap[$dateStr] ?? 0;
+            $weekWalkinsTotal += $chartWalkinsMap[$dateStr] ?? 0;
             $checkDate->modify('+1 day');
         }
         
         $chartLabels[] = $current->format('M d') . ' - ' . $weekEnd->format('M d');
         $chartValues[] = $weekTotal;
+        $chartWalkinsValues[] = $weekWalkinsTotal;
         $current->modify('+7 days');
     }
 } else {
@@ -205,6 +255,7 @@ if ($daysDiff > 30) {
         $dateStr = $current->format('Y-m-d');
         $chartLabels[] = $current->format('M d');
         $chartValues[] = $chartDataMap[$dateStr] ?? 0;
+        $chartWalkinsValues[] = $chartWalkinsMap[$dateStr] ?? 0;
         $current->modify('+1 day');
     }
 }
@@ -239,21 +290,20 @@ require_once __DIR__ . '/../inc/header.php';
   <h4 class="mb-3">Appointment History</h4>
   <p class="text-muted mb-4">View all appointment records and transactions. This serves as the barangay's official appointment log.</p>
   
-  <!-- Separate form for Barangay ID search -->
+  <!-- Search Form -->
   <form method="get" action="history.php" class="mb-3">
     <div class="card bg-primary text-white">
       <div class="card-body">
         <div class="row g-3 align-items-end">
           <div class="col-md-10">
             <label class="form-label text-white fw-bold mb-2">
-              <i class="bi bi-search me-2"></i>Search by Barangay ID
+              <i class="bi bi-search me-2"></i>Search by Barangay ID, Name, or Phone Number
             </label>
             <input type="text" 
-                   name="search_barangay_id" 
+                   name="search" 
                    class="form-control" 
-                   placeholder="Enter Barangay ID to search appointment history..." 
-                   value="<?= esc($search_barangay_id) ?>"
-                   autofocus>
+                   placeholder="Enter Barangay ID, name, or phone number..." 
+                   value="<?= esc($search) ?>">
           </div>
           <div class="col-md-2">
             <button type="submit" class="btn btn-light w-100">
@@ -261,9 +311,9 @@ require_once __DIR__ . '/../inc/header.php';
             </button>
           </div>
         </div>
-        <?php if ($search_barangay_id): ?>
+        <?php if ($search): ?>
           <div class="mt-2">
-            <a href="history.php?<?= $filter_date_from ? 'date_from='.urlencode($filter_date_from).'&' : '' ?><?= $filter_date_to ? 'date_to='.urlencode($filter_date_to).'&' : '' ?><?= $filter_service ? 'service='.urlencode($filter_service).'&' : '' ?><?= $filter_status ? 'status='.urlencode($filter_status) : '' ?>" class="btn btn-sm btn-outline-light">
+            <a href="history.php?<?= $filter_date_from ? 'date_from='.urlencode($filter_date_from).'&' : '' ?><?= $filter_date_to ? 'date_to='.urlencode($filter_date_to).'&' : '' ?><?= $filter_service ? 'service='.urlencode($filter_service).'&' : '' ?><?= $filter_status ? 'status='.urlencode($filter_status).'&' : '' ?><?= $filter_walkin ? 'walkin='.urlencode($filter_walkin) : '' ?>" class="btn btn-sm btn-outline-light">
               <i class="bi bi-x"></i> Clear Search
             </a>
           </div>
@@ -273,6 +323,9 @@ require_once __DIR__ . '/../inc/header.php';
   </form>
   
   <form method="get" class="row g-3 mb-4">
+    <?php if ($search): ?>
+      <input type="hidden" name="search" value="<?= esc($search) ?>">
+    <?php endif; ?>
     <div class="col-md-3">
       <label class="form-label">Date From</label>
       <input type="date" name="date_from" class="form-control" value="<?= esc($filter_date_from) ?>">
@@ -281,7 +334,7 @@ require_once __DIR__ . '/../inc/header.php';
       <label class="form-label">Date To</label>
       <input type="date" name="date_to" class="form-control" value="<?= esc($filter_date_to) ?>">
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
       <label class="form-label">Service Type</label>
       <select name="service" class="form-select">
         <option value="">All Services</option>
@@ -292,7 +345,7 @@ require_once __DIR__ . '/../inc/header.php';
         <?php endforeach; ?>
       </select>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
       <label class="form-label">Status</label>
       <select name="status" class="form-select">
         <option value="">All Statuses</option>
@@ -303,18 +356,23 @@ require_once __DIR__ . '/../inc/header.php';
         <?php endforeach; ?>
       </select>
     </div>
+    <div class="col-md-2">
+      <label class="form-label">Type</label>
+      <select name="walkin" class="form-select">
+        <option value="">All Types</option>
+        <option value="yes" <?= $filter_walkin === 'yes' ? 'selected' : '' ?>>Walk-In Only</option>
+        <option value="no" <?= $filter_walkin === 'no' ? 'selected' : '' ?>>Appointment Only</option>
+      </select>
+    </div>
     <div class="col-md-12">
-      <?php if ($search_barangay_id): ?>
-        <input type="hidden" name="search_barangay_id" value="<?= esc($search_barangay_id) ?>">
-      <?php endif; ?>
       <button type="submit" class="btn btn-primary me-2">Filter</button>
-      <a href="history.php<?= $search_barangay_id ? '?search_barangay_id='.urlencode($search_barangay_id) : '' ?>" class="btn btn-outline-secondary">Clear Date/Service Filters</a>
+      <a href="history.php<?= $search ? '?search='.urlencode($search) : '' ?>" class="btn btn-outline-secondary">Clear Filters</a>
     </div>
   </form>
   
-  <?php if ($search_barangay_id): ?>
+  <?php if ($search): ?>
     <div class="alert alert-info alert-dismissible fade show mb-3">
-      <i class="bi bi-info-circle"></i> Showing appointment history for Barangay ID: <strong><?= esc($search_barangay_id) ?></strong>
+      <i class="bi bi-info-circle"></i> Showing results for: <strong><?= esc($search) ?></strong>
       <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
   <?php endif; ?>
@@ -395,6 +453,7 @@ require_once __DIR__ . '/../inc/header.php';
             <th>ID</th>
             <th>Citizen</th>
             <th>Barangay ID</th>
+            <th>Type</th>
             <th>Service</th>
             <th>Date</th>
             <th>Queue</th>
@@ -416,7 +475,7 @@ require_once __DIR__ . '/../inc/header.php';
             elseif ($status === 'approved') $badgeClass = 'bg-info';
             elseif ($status === 'pending') $badgeClass = 'bg-warning';
           ?>
-            <tr>
+            <tr class="appointment-row" style="cursor: pointer;" data-appointment-id="<?= esc($a['appointment_id']) ?>" data-bs-toggle="modal" data-bs-target="#appointmentModal<?= esc($a['appointment_id']) ?>">
               <td><?= esc($a['appointment_id']) ?></td>
               <td>
                 <div class="d-flex align-items-center">
@@ -429,6 +488,11 @@ require_once __DIR__ . '/../inc/header.php';
                 </div>
               </td>
               <td><strong><?= esc($a['cin']) ?></strong></td>
+              <td>
+                <span class="badge <?= $a['appointment_type'] === 'Walk-In' ? 'bg-info' : 'bg-primary' ?>">
+                  <?= esc($a['appointment_type']) ?>
+                </span>
+              </td>
               <td><?= esc($a['service_type']) ?></td>
               <td><?= esc($a['preferred_date']) ?></td>
               <td><?= esc($a['queue_number']) ?></td>
@@ -446,17 +510,159 @@ require_once __DIR__ . '/../inc/header.php';
                 <small class="text-muted"><?= esc(date('h:i A', strtotime($a['created_at']))) ?></small>
               </td>
             </tr>
+            
+            <!-- Appointment Detail Modal -->
+            <div class="modal fade" id="appointmentModal<?= esc($a['appointment_id']) ?>" tabindex="-1" aria-labelledby="appointmentModalLabel<?= esc($a['appointment_id']) ?>" aria-hidden="true">
+              <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <h5 class="modal-title" id="appointmentModalLabel<?= esc($a['appointment_id']) ?>">
+                      <i class="bi bi-calendar-check me-2"></i>Appointment Details #<?= esc($a['appointment_id']) ?>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                  </div>
+                  <div class="modal-body">
+                    <div class="row g-3">
+                      <div class="col-md-12">
+                        <div class="d-flex align-items-center mb-3">
+                          <?php 
+                          $citizenPic = !empty($a['profile_picture']) ? $a['profile_picture'] : null;
+                          $defaultPic = 'data:image/svg+xml;base64,' . base64_encode('<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 80 80"><circle cx="40" cy="40" r="40" fill="#dee2e6"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="35" fill="#6c757d">' . strtoupper(substr($a['first_name'] ?? 'U', 0, 1)) . '</text></svg>');
+                          ?>
+                          <img src="<?= $citizenPic ? esc('/elog_barangay/public/' . $citizenPic) : $defaultPic ?>" 
+                               alt="Profile" 
+                               class="rounded-circle me-3 profile-picture-lg">
+                          <div>
+                            <h5 class="mb-0"><?= esc(trim(($a['first_name'] ?? '') . ' ' . ($a['middle_name'] ?? '') . ' ' . ($a['last_name'] ?? ''))) ?></h5>
+                            <p class="text-muted mb-0"><?= esc($a['cin']) ?></p>
+                            <span class="badge <?= $a['appointment_type'] === 'Walk-In' ? 'bg-info' : 'bg-primary' ?> mt-1">
+                              <?= esc($a['appointment_type']) ?>
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div class="col-md-6">
+                        <h6 class="text-primary"><i class="bi bi-info-circle me-2"></i>Appointment Information</h6>
+                        <dl class="row mb-0">
+                          <dt class="col-sm-5">Service Type:</dt>
+                          <dd class="col-sm-7"><strong><?= esc($a['service_type']) ?></strong></dd>
+                          
+                          <dt class="col-sm-5">Date:</dt>
+                          <dd class="col-sm-7"><?= esc($a['preferred_date'] ? date('F d, Y', strtotime($a['preferred_date'])) : 'N/A') ?></dd>
+                          
+                          <?php if (!empty($a['preferred_start']) && !empty($a['preferred_end'])): ?>
+                          <dt class="col-sm-5">Time:</dt>
+                          <dd class="col-sm-7"><?= esc(date('h:i A', strtotime($a['preferred_start']))) ?> - <?= esc(date('h:i A', strtotime($a['preferred_end']))) ?></dd>
+                          <?php endif; ?>
+                          
+                          <?php if (!empty($a['time_slot'])): ?>
+                          <dt class="col-sm-5">Time Slot:</dt>
+                          <dd class="col-sm-7"><?= esc(ucfirst($a['time_slot'])) ?></dd>
+                          <?php endif; ?>
+                          
+                          <dt class="col-sm-5">Queue Number:</dt>
+                          <dd class="col-sm-7"><span class="badge bg-secondary"><?= esc($a['queue_number'] ?? 'N/A') ?></span></dd>
+                          
+                          <dt class="col-sm-5">Status:</dt>
+                          <dd class="col-sm-7">
+                            <span class="badge <?= $badgeClass ?> text-uppercase"><?= esc($a['status']) ?></span>
+                          </dd>
+                        </dl>
+                      </div>
+                      
+                      <div class="col-md-6">
+                        <h6 class="text-primary"><i class="bi bi-person me-2"></i>Contact Information</h6>
+                        <dl class="row mb-0">
+                          <dt class="col-sm-5">Phone Number:</dt>
+                          <dd class="col-sm-7"><?= esc($a['contact_number'] ?? 'N/A') ?></dd>
+                          
+                          <?php if (!empty($a['email'])): ?>
+                          <dt class="col-sm-5">Email:</dt>
+                          <dd class="col-sm-7"><?= esc($a['email']) ?></dd>
+                          <?php endif; ?>
+                          
+                          <?php if (!empty($a['address'])): ?>
+                          <dt class="col-sm-5">Address:</dt>
+                          <dd class="col-sm-7"><?= esc($a['address']) ?></dd>
+                          <?php endif; ?>
+                        </dl>
+                      </div>
+                      
+                      <?php if (!empty($a['details'])): ?>
+                      <div class="col-12">
+                        <h6 class="text-primary"><i class="bi bi-file-text me-2"></i>Additional Details</h6>
+                        <p class="mb-0"><?= nl2br(esc($a['details'])) ?></p>
+                      </div>
+                      <?php endif; ?>
+                      
+                      <div class="col-md-6">
+                        <h6 class="text-primary"><i class="bi bi-person-badge me-2"></i>Assigned Official</h6>
+                        <p class="mb-0"><?= esc($a['official_name'] ?? 'Unassigned') ?></p>
+                        <?php if (!empty($a['processed_by_name']) && $a['status'] === 'completed'): ?>
+                          <small class="text-muted">Processed by: <?= esc($a['processed_by_name']) ?></small>
+                        <?php endif; ?>
+                      </div>
+                      
+                      <div class="col-md-6">
+                        <h6 class="text-primary"><i class="bi bi-clock-history me-2"></i>Timestamps</h6>
+                        <dl class="row mb-0">
+                          <dt class="col-sm-6">Created:</dt>
+                          <dd class="col-sm-6">
+                            <small><?= esc(date('M d, Y h:i A', strtotime($a['created_at']))) ?></small>
+                          </dd>
+                          
+                          <?php if (!empty($a['updated_at']) && $a['updated_at'] !== $a['created_at']): ?>
+                          <dt class="col-sm-6">Last Updated:</dt>
+                          <dd class="col-sm-6">
+                            <small><?= esc(date('M d, Y h:i A', strtotime($a['updated_at']))) ?></small>
+                          </dd>
+                          <?php endif; ?>
+                        </dl>
+                      </div>
+                      
+                      <?php if (!empty($a['admin_notes'])): ?>
+                      <div class="col-12">
+                        <h6 class="text-primary"><i class="bi bi-sticky me-2"></i>Admin Notes</h6>
+                        <div class="alert alert-info mb-0">
+                          <?= nl2br(esc($a['admin_notes'])) ?>
+                        </div>
+                      </div>
+                      <?php endif; ?>
+                    </div>
+                  </div>
+                  <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                  </div>
+                </div>
+              </div>
+            </div>
           <?php endforeach; ?>
           </tbody>
           </table>
           </div>
           
+          <?php 
+          // Build query string for pagination
+          $paginationParams = [];
+          if ($filter_date_from) $paginationParams['date_from'] = $filter_date_from;
+          if ($filter_date_to) $paginationParams['date_to'] = $filter_date_to;
+          if ($filter_service) $paginationParams['service'] = $filter_service;
+          if ($filter_status) $paginationParams['status'] = $filter_status;
+          if ($filter_walkin) $paginationParams['walkin'] = $filter_walkin;
+          if ($search) $paginationParams['search'] = $search;
+          if ($chart_date_from) $paginationParams['chart_date_from'] = $chart_date_from;
+          if ($chart_date_to) $paginationParams['chart_date_to'] = $chart_date_to;
+          if ($pie_month) $paginationParams['pie_month'] = $pie_month;
+          if ($pie_year) $paginationParams['pie_year'] = $pie_year;
+          $paginationQuery = !empty($paginationParams) ? '&' . http_build_query($paginationParams) : '';
+          ?>
           <?php if($totalPages > 1): ?>
             <nav aria-label="Page navigation" class="mt-3">
               <ul class="pagination pagination-sm justify-content-center mb-0">
                 <?php if($page > 1): ?>
                   <li class="page-item">
-                    <a class="page-link" href="?page=<?= $page - 1 ?><?= $filter_date_from ? '&date_from='.urlencode($filter_date_from) : '' ?><?= $filter_date_to ? '&date_to='.urlencode($filter_date_to) : '' ?><?= $filter_service ? '&service='.urlencode($filter_service) : '' ?><?= $filter_status ? '&status='.urlencode($filter_status) : '' ?><?= $search_barangay_id ? '&search_barangay_id='.urlencode($search_barangay_id) : '' ?><?= $chart_date_from ? '&chart_date_from='.urlencode($chart_date_from) : '' ?><?= $chart_date_to ? '&chart_date_to='.urlencode($chart_date_to) : '' ?><?= $pie_month ? '&pie_month='.urlencode($pie_month) : '' ?><?= $pie_year ? '&pie_year='.urlencode($pie_year) : '' ?>">Previous</a>
+                    <a class="page-link" href="?page=<?= $page - 1 ?><?= $paginationQuery ?>">Previous</a>
                   </li>
                 <?php else: ?>
                   <li class="page-item disabled">
@@ -470,7 +676,7 @@ require_once __DIR__ . '/../inc/header.php';
                 
                 if ($startPage > 1): ?>
                   <li class="page-item">
-                    <a class="page-link" href="?page=1<?= $filter_date_from ? '&date_from='.urlencode($filter_date_from) : '' ?><?= $filter_date_to ? '&date_to='.urlencode($filter_date_to) : '' ?><?= $filter_service ? '&service='.urlencode($filter_service) : '' ?><?= $filter_status ? '&status='.urlencode($filter_status) : '' ?><?= $search_barangay_id ? '&search_barangay_id='.urlencode($search_barangay_id) : '' ?><?= $chart_date_from ? '&chart_date_from='.urlencode($chart_date_from) : '' ?><?= $chart_date_to ? '&chart_date_to='.urlencode($chart_date_to) : '' ?><?= $pie_month ? '&pie_month='.urlencode($pie_month) : '' ?><?= $pie_year ? '&pie_year='.urlencode($pie_year) : '' ?>">1</a>
+                    <a class="page-link" href="?page=1<?= $paginationQuery ?>">1</a>
                   </li>
                   <?php if ($startPage > 2): ?>
                     <li class="page-item disabled"><span class="page-link">...</span></li>
@@ -479,7 +685,7 @@ require_once __DIR__ . '/../inc/header.php';
                 
                 <?php for($i = $startPage; $i <= $endPage; $i++): ?>
                   <li class="page-item <?= $i == $page ? 'active' : '' ?>">
-                    <a class="page-link" href="?page=<?= $i ?><?= $filter_date_from ? '&date_from='.urlencode($filter_date_from) : '' ?><?= $filter_date_to ? '&date_to='.urlencode($filter_date_to) : '' ?><?= $filter_service ? '&service='.urlencode($filter_service) : '' ?><?= $filter_status ? '&status='.urlencode($filter_status) : '' ?><?= $search_barangay_id ? '&search_barangay_id='.urlencode($search_barangay_id) : '' ?><?= $chart_date_from ? '&chart_date_from='.urlencode($chart_date_from) : '' ?><?= $chart_date_to ? '&chart_date_to='.urlencode($chart_date_to) : '' ?><?= $pie_month ? '&pie_month='.urlencode($pie_month) : '' ?><?= $pie_year ? '&pie_year='.urlencode($pie_year) : '' ?>"><?= $i ?></a>
+                    <a class="page-link" href="?page=<?= $i ?><?= $paginationQuery ?>"><?= $i ?></a>
                   </li>
                 <?php endfor; ?>
                 
@@ -488,13 +694,13 @@ require_once __DIR__ . '/../inc/header.php';
                     <li class="page-item disabled"><span class="page-link">...</span></li>
                   <?php endif; ?>
                   <li class="page-item">
-                    <a class="page-link" href="?page=<?= $totalPages ?><?= $filter_date_from ? '&date_from='.urlencode($filter_date_from) : '' ?><?= $filter_date_to ? '&date_to='.urlencode($filter_date_to) : '' ?><?= $filter_service ? '&service='.urlencode($filter_service) : '' ?><?= $filter_status ? '&status='.urlencode($filter_status) : '' ?><?= $search_barangay_id ? '&search_barangay_id='.urlencode($search_barangay_id) : '' ?><?= $chart_date_from ? '&chart_date_from='.urlencode($chart_date_from) : '' ?><?= $chart_date_to ? '&chart_date_to='.urlencode($chart_date_to) : '' ?><?= $pie_month ? '&pie_month='.urlencode($pie_month) : '' ?><?= $pie_year ? '&pie_year='.urlencode($pie_year) : '' ?>"><?= $totalPages ?></a>
+                    <a class="page-link" href="?page=<?= $totalPages ?><?= $paginationQuery ?>"><?= $totalPages ?></a>
                   </li>
                 <?php endif; ?>
                 
                 <?php if($page < $totalPages): ?>
                   <li class="page-item">
-                    <a class="page-link" href="?page=<?= $page + 1 ?><?= $filter_date_from ? '&date_from='.urlencode($filter_date_from) : '' ?><?= $filter_date_to ? '&date_to='.urlencode($filter_date_to) : '' ?><?= $filter_service ? '&service='.urlencode($filter_service) : '' ?><?= $filter_status ? '&status='.urlencode($filter_status) : '' ?><?= $search_barangay_id ? '&search_barangay_id='.urlencode($search_barangay_id) : '' ?><?= $chart_date_from ? '&chart_date_from='.urlencode($chart_date_from) : '' ?><?= $chart_date_to ? '&chart_date_to='.urlencode($chart_date_to) : '' ?><?= $pie_month ? '&pie_month='.urlencode($pie_month) : '' ?><?= $pie_year ? '&pie_year='.urlencode($pie_year) : '' ?>">Next</a>
+                    <a class="page-link" href="?page=<?= $page + 1 ?><?= $paginationQuery ?>">Next</a>
                   </li>
                 <?php else: ?>
                   <li class="page-item disabled">
@@ -525,15 +731,26 @@ require_once __DIR__ . '/../inc/header.php';
   if (lineCtx) {
     const lineData = {
       labels: <?= json_encode($chartLabels) ?>,
-      datasets: [{
-        label: 'Appointments',
-        data: <?= json_encode($chartValues) ?>,
-        borderColor: '#0d6efd',
-        backgroundColor: 'rgba(13,110,253,0.2)',
-        tension: 0.3,
-        fill: true,
-        borderWidth: 2
-      }]
+      datasets: [
+        {
+          label: 'Appointments',
+          data: <?= json_encode($chartValues) ?>,
+          borderColor: '#0d6efd',
+          backgroundColor: 'rgba(13,110,253,0.2)',
+          tension: 0.3,
+          fill: true,
+          borderWidth: 2
+        },
+        {
+          label: 'Walk-ins',
+          data: <?= json_encode($chartWalkinsValues) ?>,
+          borderColor: '#ffc107',
+          backgroundColor: 'rgba(255,193,7,0.2)',
+          tension: 0.3,
+          fill: true,
+          borderWidth: 2
+        }
+      ]
     };
     
     new Chart(lineCtx, {
@@ -612,7 +829,7 @@ require_once __DIR__ . '/../inc/header.php';
     <?php if($filter_date_to): ?>url.searchParams.set('date_to', '<?= esc($filter_date_to) ?>');<?php endif; ?>
     <?php if($filter_service): ?>url.searchParams.set('service', '<?= esc($filter_service) ?>');<?php endif; ?>
     <?php if($filter_status): ?>url.searchParams.set('status', '<?= esc($filter_status) ?>');<?php endif; ?>
-    <?php if($search_barangay_id): ?>url.searchParams.set('search_barangay_id', '<?= esc($search_barangay_id) ?>');<?php endif; ?>
+    <?php if($search): ?>url.searchParams.set('search', '<?= esc($search) ?>');<?php endif; ?>
     <?php if($pie_month): ?>url.searchParams.set('pie_month', '<?= esc($pie_month) ?>');<?php endif; ?>
     <?php if($pie_year): ?>url.searchParams.set('pie_year', '<?= esc($pie_year) ?>');<?php endif; ?>
     window.location = url.toString();
@@ -629,7 +846,7 @@ require_once __DIR__ . '/../inc/header.php';
     <?php if($filter_date_to): ?>url.searchParams.set('date_to', '<?= esc($filter_date_to) ?>');<?php endif; ?>
     <?php if($filter_service): ?>url.searchParams.set('service', '<?= esc($filter_service) ?>');<?php endif; ?>
     <?php if($filter_status): ?>url.searchParams.set('status', '<?= esc($filter_status) ?>');<?php endif; ?>
-    <?php if($search_barangay_id): ?>url.searchParams.set('search_barangay_id', '<?= esc($search_barangay_id) ?>');<?php endif; ?>
+    <?php if($search): ?>url.searchParams.set('search', '<?= esc($search) ?>');<?php endif; ?>
     <?php if($chart_date_from): ?>url.searchParams.set('chart_date_from', '<?= esc($chart_date_from) ?>');<?php endif; ?>
     <?php if($chart_date_to): ?>url.searchParams.set('chart_date_to', '<?= esc($chart_date_to) ?>');<?php endif; ?>
     window.location = url.toString();
