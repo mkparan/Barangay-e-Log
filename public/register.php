@@ -74,51 +74,51 @@ require_once __DIR__ . '/../inc/header.php';
   <form method="post" novalidate>
     <div class="mb-3">
       <label class="form-label">Barangay ID <span class="text-danger">*</span></label>
-      <input class="form-control" name="cin" required placeholder="Enter your Barangay ID">
+      <input class="form-control" name="cin" required placeholder="Enter your Barangay ID" value="<?= esc($_POST['cin'] ?? '') ?>">
       <small class="text-muted">Your account will need to be verified by barangay officials before you can book appointments.</small>
     </div>
     <div class="row">
       <div class="col-md-6 mb-3">
         <label class="form-label">First name</label>
-        <input class="form-control" name="first_name" required>
+        <input class="form-control" name="first_name" required value="<?= esc($_POST['first_name'] ?? '') ?>">
       </div>
       <div class="col-md-6 mb-3">
         <label class="form-label">Last name</label>
-        <input class="form-control" name="last_name" required>
+        <input class="form-control" name="last_name" required value="<?= esc($_POST['last_name'] ?? '') ?>">
       </div>
     </div>
     <div class="mb-3">
       <label class="form-label">Middle name</label>
-      <input class="form-control" name="middle_name">
+      <input class="form-control" name="middle_name" value="<?= esc($_POST['middle_name'] ?? '') ?>">
     </div>
     <div class="mb-3">
       <label class="form-label">Birth date</label>
-      <input type="date" class="form-control" name="birth_date">
+      <input type="date" class="form-control" name="birth_date" value="<?= esc($_POST['birth_date'] ?? '') ?>">
     </div>
     <div class="mb-3">
       <label class="form-label">Gender <span class="text-danger">*</span></label>
       <select class="form-select" name="gender" required>
         <option value="">Select Gender</option>
-        <option value="Male">Male</option>
-        <option value="Female">Female</option>
-        <option value="Other">Other</option>
+        <option value="Male" <?= (($_POST['gender'] ?? '') === 'Male') ? 'selected' : '' ?>>Male</option>
+        <option value="Female" <?= (($_POST['gender'] ?? '') === 'Female') ? 'selected' : '' ?>>Female</option>
+        <option value="Other" <?= (($_POST['gender'] ?? '') === 'Other') ? 'selected' : '' ?>>Other</option>
       </select>
     </div>
     <div class="mb-3">
       <label class="form-label">Contact number</label>
-      <input class="form-control" name="contact_number">
+      <input class="form-control" name="contact_number" value="<?= esc($_POST['contact_number'] ?? '') ?>">
     </div>
     <div class="mb-3">
       <label class="form-label">Email</label>
-      <input class="form-control" name="email" type="email">
+      <input class="form-control" name="email" type="email" value="<?= esc($_POST['email'] ?? '') ?>">
     </div>
     <div class="mb-3">
       <label class="form-label">Address</label>
-      <textarea class="form-control" name="address"></textarea>
+      <textarea class="form-control" name="address"><?= esc($_POST['address'] ?? '') ?></textarea>
     </div>
     <div class="mb-3">
       <label class="form-label">Gov affiliations (4Ps, PhilHealth, PWD, Senior)</label>
-      <input class="form-control" name="gov_aff">
+      <input class="form-control" name="gov_aff" value="<?= esc($_POST['gov_aff'] ?? '') ?>">
     </div>
     
     <hr class="my-4">
