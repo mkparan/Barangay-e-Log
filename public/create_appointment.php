@@ -166,7 +166,9 @@ require_once __DIR__ . '/../inc/header.php';
 
 $services = [
   'Barangay Clearance','Certificate of Residency','Certificate of Indigency','Purok Clearance','Barangay Clearance Recommendation',
-  'Certificate of No Issuance','Barangay Business Permit','Complaint Blotter','Settlement/Mediation Certification','Cedula','Certificate of Tribal Membership','Others'
+  'Certificate of No Issuance','Barangay Business Permit','Complaint Blotter','Settlement/Mediation Certification','Cedula','Certificate of Tribal Membership',
+  'SK Clearance', 'Youth Council Consultation', 'Use of Barangay Facilities',
+  'Others'
 ];
 
 $service_requirements = [
@@ -224,6 +226,20 @@ $service_requirements = [
         'Valid ID',
         'Certification from tribal chieftain/elder',
         'Two community witnesses (if required)'
+    ],
+    'SK Clearance' => [
+        'Valid ID (School ID, Voter ID, etc.)',
+        'Proof of residency in the barangay',
+        'Purpose of request'
+    ],
+    'Youth Council Consultation' => [
+        'Valid ID',
+        'Topic or agenda for consultation'
+    ],
+    'Use of Barangay Facilities' => [
+        'Valid ID of requestor',
+        'Letter of Request / Activity Design',
+        'List of attendees (if applicable)'
     ],
     'Others' => [
         'Valid ID',

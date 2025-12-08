@@ -129,6 +129,7 @@ $isAdminDashboard = ($currentPage === 'index.php' && strpos($currentPath, '/admi
               <?php endif; ?>
               <li><a class="dropdown-item" href="/elog_barangay/admin/check_in.php"><i class="bi bi-clock-history me-2"></i>Official Check-In</a></li>
               <li><a class="dropdown-item" href="/elog_barangay/admin/history.php"><i class="bi bi-journal-text me-2"></i>Appointment History</a></li>
+              <li><a class="dropdown-item" href="/elog_barangay/admin/audit_logs.php"><i class="bi bi-shield-lock me-2"></i>Audit Logs</a></li>
               <li><hr class="dropdown-divider"></li>
               <li><a class="dropdown-item" href="/elog_barangay/admin/profile.php"><i class="bi bi-person-circle me-2"></i>Profile</a></li>
               <li><a class="dropdown-item" href="/elog_barangay/admin/logout.php"><i class="bi bi-box-arrow-right me-2"></i>Logout</a></li>

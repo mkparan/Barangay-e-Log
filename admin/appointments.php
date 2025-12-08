@@ -33,7 +33,8 @@ if ($action && $id) {
         $stmt->bind_param('ii', $_SESSION['user']['user_id'], $id);
         $stmt->execute();
         audit_log($_SESSION['user']['username'], $_SESSION['user']['user_id'], 'appointment_approved', 'appointments', $id);
-        header("Location: appointments.php?msg=approved{$redirectFilter}{$redirectService}{$redirectSearch}{$redirectDateFilter}{$redirectDateFrom}{$redirectDateTo}&page=1");
+        // Force redirect to 'all' filter so the approved appointment remains visible (as per user request)
+        header("Location: appointments.php?msg=approved&filter=all{$redirectService}{$redirectSearch}{$redirectDateFilter}{$redirectDateFrom}{$redirectDateTo}&page=1");
         exit;
 
     } elseif ($action === 'decline') {
@@ -117,7 +118,7 @@ $availableServices = $servicesStmt ? $servicesStmt->fetch_all(MYSQLI_ASSOC) : []
 $countSql = "
     SELECT COUNT(*) as total
     FROM appointments a
-    JOIN citizens c ON a.citizen_id = c.citizen_id
+    LEFT JOIN citizens c ON a.citizen_id = c.citizen_id
     WHERE $where
 ";
 
@@ -210,39 +211,35 @@ if ($searchBarangayId) {
 }
 
 // Build SQL - use placeholders for LIMIT/OFFSET if we have any filters
-if (!empty($bindParams)) {
+    // Build SQL - use placeholders for LIMIT/OFFSET if we have any filters
     $sql = "
-        SELECT a.*, c.first_name, c.last_name, c.cin, c.profile_picture, p.full_name AS processed_by_name
+        SELECT a.*, c.first_name, c.last_name, c.cin, c.profile_picture, p.full_name AS processed_by_name,
+        a.walkin_name, a.walkin_contact
         FROM appointments a
-        JOIN citizens c ON a.citizen_id = c.citizen_id
+        LEFT JOIN citizens c ON a.citizen_id = c.citizen_id
         LEFT JOIN users p ON a.processed_by = p.user_id
         WHERE $where
         ORDER BY a.created_at DESC
         LIMIT ? OFFSET ?
     ";
-    // Add pagination parameters
-    $bindParams[] = $perPage;
-    $bindParams[] = $offset;
-    $bindTypes .= 'ii';
     
-    $stmt = $db->prepare($sql);
-    $stmt->bind_param($bindTypes, ...$bindParams);
-    $stmt->execute();
-    $appointments = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-} else {
-    // No filters - use direct query
-    $sql = "
-        SELECT a.*, c.first_name, c.last_name, c.cin, c.profile_picture, p.full_name AS processed_by_name
-        FROM appointments a
-        JOIN citizens c ON a.citizen_id = c.citizen_id
-        LEFT JOIN users p ON a.processed_by = p.user_id
-        WHERE $where
-        ORDER BY a.created_at DESC
-        LIMIT $perPage OFFSET $offset
-    ";
-    $stmt = $db->query($sql);
-    $appointments = $stmt->fetch_all(MYSQLI_ASSOC);
-}
+    if (!empty($bindParams)) {
+         $bindParams[] = $perPage;
+         $bindParams[] = $offset;
+         $bindTypes .= 'ii';
+         $stmt = $db->prepare($sql);
+         $stmt->bind_param($bindTypes, ...$bindParams);
+         $stmt->execute();
+         $appointments = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    } else {
+         // No filters - use direct query but bind limit/offset
+         $bindParams = [$perPage, $offset];
+         $bindTypes = 'ii';
+         $stmt = $db->prepare($sql);
+         $stmt->bind_param($bindTypes, ...$bindParams);
+         $stmt->execute();
+         $appointments = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    }
 
 $page_title = "Manage Appointments";
 require_once __DIR__ . '/../inc/header.php';
@@ -396,10 +393,10 @@ require_once __DIR__ . '/../inc/header.php';
                 <img src="<?= $citizenPic ? esc('/elog_barangay/public/' . $citizenPic) : $defaultPic ?>" 
                      alt="Profile" 
                      class="rounded-circle me-2 profile-picture-md">
-                <span><?= esc($a['first_name'].' '.$a['last_name']) ?></span>
+                <span><?= esc(!empty($a['first_name']) ? $a['first_name'].' '.$a['last_name'] : ($a['walkin_name'] ?? 'Walk-In Guest')) ?></span>
               </div>
             </td>
-            <td><strong><?= esc($a['cin']) ?></strong></td>
+            <td><strong><?= esc(!empty($a['cin']) ? $a['cin'] : 'WALK-IN') ?></strong></td>
             <td><?= esc($a['service_type']) ?></td>
             <td><?= esc($a['preferred_date']) ?></td>
             <td>

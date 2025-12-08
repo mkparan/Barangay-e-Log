@@ -59,7 +59,10 @@ if (isset($_GET['delete'])) {
     exit;
 }
 
-// Get all availability records
+// Auto-delete past availability dates
+$db->query("DELETE FROM appointment_availability WHERE available_date < CURDATE()");
+
+// Get all availability records (now only >= Today)
 $availability = $db->query("
     SELECT a.*, u.full_name as created_by_name
     FROM appointment_availability a

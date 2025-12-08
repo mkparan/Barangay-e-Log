@@ -44,7 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt2->execute();
 
         audit_log($_SESSION['user']['username'], $_SESSION['user']['user_id'], 'appointment_rescheduled', 'appointments', $id);
-        header('Location: appointments.php?msg=rescheduled');
+        header('Location: appointments.php?msg=rescheduled&filter=all');
         exit;
     }
 }

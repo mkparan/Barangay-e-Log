@@ -125,13 +125,16 @@ $sql = "
         c.address,
         c.profile_picture,
         CASE 
+            WHEN a.citizen_id IS NULL THEN 'Walk-In'
             WHEN c.cin LIKE 'WALKIN-%' THEN 'Walk-In'
             ELSE 'Appointment'
-        END AS appointment_type
+        END AS appointment_type,
+        a.walkin_name,
+        a.walkin_contact
     FROM appointments a
     LEFT JOIN users u ON a.official_id = u.user_id
     LEFT JOIN users p ON a.processed_by = p.user_id
-    JOIN citizens c ON a.citizen_id = c.citizen_id
+    LEFT JOIN citizens c ON a.citizen_id = c.citizen_id
     WHERE $where
     ORDER BY a.created_at DESC
     LIMIT ? OFFSET ?
@@ -199,8 +202,8 @@ $chartData = $chartStmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $chartWalkinsStmt = $db->prepare("
     SELECT DATE(a.created_at) AS date, COUNT(*) AS total 
     FROM appointments a
-    JOIN citizens c ON a.citizen_id = c.citizen_id
-    WHERE DATE(a.created_at) >= ? AND DATE(a.created_at) <= ? AND c.cin LIKE 'WALKIN-%'
+    LEFT JOIN citizens c ON a.citizen_id = c.citizen_id
+    WHERE DATE(a.created_at) >= ? AND DATE(a.created_at) <= ? AND (a.citizen_id IS NULL OR c.cin LIKE 'WALKIN-%')
     GROUP BY DATE(a.created_at)
     ORDER BY date ASC
 ");
@@ -465,7 +468,8 @@ require_once __DIR__ . '/../inc/header.php';
         <tbody>
           <?php foreach($appointments as $a): 
             $citizenPic = !empty($a['profile_picture']) ? $a['profile_picture'] : null;
-            $defaultPic = 'data:image/svg+xml;base64,' . base64_encode('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="20" fill="#dee2e6"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="20" fill="#6c757d">' . strtoupper(substr($a['first_name'] ?? 'U', 0, 1)) . '</text></svg>');
+            $displayName = !empty($a['first_name']) ? $a['first_name'] : ($a['walkin_name'] ?? 'Walk-In Guest');
+            $defaultPic = 'data:image/svg+xml;base64,' . base64_encode('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="20" fill="#dee2e6"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="20" fill="#6c757d">' . strtoupper(substr($displayName, 0, 1)) . '</text></svg>');
             
             $status = strtolower($a['status'] ?? '');
             $badgeClass = 'bg-secondary';
@@ -483,11 +487,11 @@ require_once __DIR__ . '/../inc/header.php';
                        alt="Profile" 
                        class="rounded-circle me-2 profile-picture-md">
                   <div>
-                    <div><?= esc($a['first_name'].' '.$a['last_name']) ?></div>
+                    <div><?= esc(!empty($a['first_name']) ? $a['first_name'].' '.$a['last_name'] : ($a['walkin_name'] ?? 'Walk-In Guest')) ?></div>
                   </div>
                 </div>
               </td>
-              <td><strong><?= esc($a['cin']) ?></strong></td>
+              <td><strong><?= esc(!empty($a['cin']) ? $a['cin'] : 'WALK-IN') ?></strong></td>
               <td>
                 <span class="badge <?= $a['appointment_type'] === 'Walk-In' ? 'bg-info' : 'bg-primary' ?>">
                   <?= esc($a['appointment_type']) ?>
@@ -527,14 +531,16 @@ require_once __DIR__ . '/../inc/header.php';
                         <div class="d-flex align-items-center mb-3">
                           <?php 
                           $citizenPic = !empty($a['profile_picture']) ? $a['profile_picture'] : null;
-                          $defaultPic = 'data:image/svg+xml;base64,' . base64_encode('<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 80 80"><circle cx="40" cy="40" r="40" fill="#dee2e6"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="35" fill="#6c757d">' . strtoupper(substr($a['first_name'] ?? 'U', 0, 1)) . '</text></svg>');
+                          $displayName = !empty($a['first_name']) ? $a['first_name'] : ($a['walkin_name'] ?? 'Walk-In Guest');
+                          $displayCin = !empty($a['cin']) ? $a['cin'] : 'WALK-IN';
+                          $defaultPic = 'data:image/svg+xml;base64,' . base64_encode('<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 80 80"><circle cx="40" cy="40" r="40" fill="#dee2e6"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="35" fill="#6c757d">' . strtoupper(substr($displayName, 0, 1)) . '</text></svg>');
                           ?>
                           <img src="<?= $citizenPic ? esc('/elog_barangay/public/' . $citizenPic) : $defaultPic ?>" 
                                alt="Profile" 
                                class="rounded-circle me-3 profile-picture-lg">
                           <div>
-                            <h5 class="mb-0"><?= esc(trim(($a['first_name'] ?? '') . ' ' . ($a['middle_name'] ?? '') . ' ' . ($a['last_name'] ?? ''))) ?></h5>
-                            <p class="text-muted mb-0"><?= esc($a['cin']) ?></p>
+                            <h5 class="mb-0"><?= esc(!empty($a['first_name']) ? trim($a['first_name'] . ' ' . ($a['middle_name'] ?? '') . ' ' . $a['last_name']) : $displayName) ?></h5>
+                            <p class="text-muted mb-0"><?= esc($displayCin) ?></p>
                             <span class="badge <?= $a['appointment_type'] === 'Walk-In' ? 'bg-info' : 'bg-primary' ?> mt-1">
                               <?= esc($a['appointment_type']) ?>
                             </span>
@@ -575,7 +581,7 @@ require_once __DIR__ . '/../inc/header.php';
                         <h6 class="text-primary"><i class="bi bi-person me-2"></i>Contact Information</h6>
                         <dl class="row mb-0">
                           <dt class="col-sm-5">Phone Number:</dt>
-                          <dd class="col-sm-7"><?= esc($a['contact_number'] ?? 'N/A') ?></dd>
+                          <dd class="col-sm-7"><?= esc(!empty($a['contact_number']) ? $a['contact_number'] : ($a['walkin_contact'] ?? 'N/A')) ?></dd>
                           
                           <?php if (!empty($a['email'])): ?>
                           <dt class="col-sm-5">Email:</dt>

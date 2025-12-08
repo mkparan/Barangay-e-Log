@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Use Case Diagram - Barangay e-Log System</title>
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    </script>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+            text-align: center;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+        }
+
+        .mermaid {
+            margin: 0 auto;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>System Use Case Diagram</h1>
+    <div class="mermaid">
+        graph LR
+        Citizen((Citizen))
+        Official((Official))
+        Admin((Admin))
+        WalkIn((Walk-in Guest))
+
+        subgraph System [Barangay e-Log System]
+        Login(Login)
+        Reg(Register)
+        Book(Book Appointment)
+        ViewHist(View History)
+        ViewAnn(View Announcements)
+        VerifyAcc(Verify Account)
+        ManageAppt(Manage Appointments)
+        VerifyCit(Verify Citizen)
+        CheckIn(Official Check In/Out)
+        ManageAnn(Manage Announcements)
+        ViewRep(View Reports)
+        ManageUsers(Manage Users)
+        ManageAvail(Manage Availability)
+        Audit(View Audit Logs)
+        WalkInKiosk(Use Walk-in Kiosk)
+        end
+
+        Citizen --- Reg
+        Citizen --- Login
+        Citizen --- Book
+        Citizen --- ViewHist
+        Citizen --- ViewAnn
+        Citizen --- VerifyAcc
+
+        WalkIn --- WalkInKiosk
+
+        Official --- Login
+        Official --- CheckIn
+        Official --- ManageAppt
+        Official --- VerifyCit
+        Official --- ManageAvail
+
+        Admin --- Login
+        Admin --- ManageUsers
+        Admin --- ManageAnn
+        Admin --- ViewRep
+        Admin --- Audit
+        Admin --- ManageAppt
+        Admin --- VerifyCit
+        Admin --- ManageAvail
+    </div>
+</body>
+
+</html>

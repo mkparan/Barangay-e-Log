@@ -316,7 +316,7 @@ The proposed system addresses all identified problems:
 - Database Name: `elog_barangay`
 - Character Set: UTF-8 (utf8mb4)
 - Storage Engine: InnoDB
-- Required Tables: 9 core tables (users, citizens, appointments, announcements, duty_roster, presence, transactions, documents, audit_logs)
+- Required Tables: 8 core tables (users, citizens, appointments, announcements, duty_roster, presence, appointment_availability, audit_logs)
 - Backup: Daily automated backups recommended
 
 **d) Network and Communication Requirements**

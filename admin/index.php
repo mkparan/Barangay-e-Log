@@ -196,7 +196,7 @@ $walkinsMap = array_fill_keys($monthKeys, 0);
 $processedMap = array_fill_keys($monthKeys, 0);
 $chartStart = $monthKeys[0] . '-01';
 
-$monthlyApptStmt = $db->prepare("SELECT DATE_FORMAT(a.created_at, '%Y-%m') AS ym, COUNT(*) AS total FROM appointments a WHERE a.created_at >= ? GROUP BY ym");
+$monthlyApptStmt = $db->prepare("SELECT DATE_FORMAT(a.created_at, '%Y-%m') AS ym, COUNT(*) AS total FROM appointments a WHERE a.created_at >= ? AND a.citizen_id IS NOT NULL GROUP BY ym");
 $monthlyApptStmt->bind_param('s', $chartStart);
 $monthlyApptStmt->execute();
 $monthlyApptResult = $monthlyApptStmt->get_result()->fetch_all(MYSQLI_ASSOC);
@@ -210,8 +210,7 @@ foreach ($monthlyApptResult as $row) {
 $monthlyWalkinsStmt = $db->prepare("
     SELECT DATE_FORMAT(a.created_at, '%Y-%m') AS ym, COUNT(*) AS total 
     FROM appointments a 
-    JOIN citizens c ON a.citizen_id = c.citizen_id 
-    WHERE a.created_at >= ? AND c.cin LIKE 'WALKIN-%' 
+    WHERE a.created_at >= ? AND a.citizen_id IS NULL 
     GROUP BY ym
 ");
 $monthlyWalkinsStmt->bind_param('s', $chartStart);
@@ -289,7 +288,7 @@ $pendingTotalPages = max(1, ceil($pendingTotalCount / $pendingPerPage));
 $pendingStmt = $db->prepare("
     SELECT a.*, c.first_name, c.last_name, c.profile_picture
     FROM appointments a
-    JOIN citizens c ON a.citizen_id = c.citizen_id
+    LEFT JOIN citizens c ON a.citizen_id = c.citizen_id
     WHERE a.status = 'pending'
     ORDER BY a.created_at ASC
     LIMIT ? OFFSET ?
@@ -634,7 +633,7 @@ if ($pendingStmt) {
                            alt="Profile" 
                            class="rounded-circle me-2" 
                            class="profile-picture-sm">
-                      <span><?= esc($p['first_name'].' '.$p['last_name']) ?></span>
+                      <span><?= esc(!empty($p['first_name']) ? $p['first_name'].' '.$p['last_name'] : ($p['walkin_name'] ?? 'Walk-In Guest')) ?></span>
                     </div>
                   </td>
                   <td><small><?= esc($p['service_type']) ?></small></td>

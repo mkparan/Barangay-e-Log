@@ -13,7 +13,9 @@ $success = isset($_GET['success']) && $_GET['success'] == '1';
 // Services list (same as create_appointment.php)
 $services = [
   'Barangay Clearance','Certificate of Residency','Certificate of Indigency','Purok Clearance','Barangay Clearance Recommendation',
-  'Certificate of No Issuance','Barangay Business Permit','Complaint Blotter','Settlement/Mediation Certification','Cedula','Certificate of Tribal Membership','Others'
+  'Certificate of No Issuance','Barangay Business Permit','Complaint Blotter','Settlement/Mediation Certification','Cedula','Certificate of Tribal Membership',
+  'SK Clearance', 'Youth Council Consultation', 'Use of Barangay Facilities',
+  'Others'
 ];
 
 // Handle form submission
@@ -48,48 +50,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         
         // If no citizen found and CIN provided, or no CIN provided, create a walk-in record
-        if ($citizenId === null) {
-            // Generate a temporary CIN for walk-ins
-            $tempCin = 'WALKIN-' . date('YmdHis') . '-' . rand(1000, 9999);
-            
-            // Check if password_hash column exists
-            $checkColumn = $db->query("SHOW COLUMNS FROM citizens LIKE 'password_hash'");
-            if ($checkColumn->num_rows == 0) {
-                $db->query("ALTER TABLE citizens ADD COLUMN password_hash VARCHAR(255) NULL AFTER email");
-            }
-            
-            // Create temporary citizen record
-            $insertStmt = $db->prepare("INSERT INTO citizens (cin, first_name, last_name, contact_number, is_verified, is_active) VALUES (?, ?, ?, ?, 0, 1)");
-            $insertStmt->bind_param('ssss', $tempCin, $firstName, $lastName, $contactNumber);
-            if ($insertStmt->execute()) {
-                $citizenId = $insertStmt->insert_id;
-                audit_log($tempCin, null, 'walkin_citizen_created', 'citizens', $citizenId);
-            } else {
-                $errors[] = "Error creating walk-in record: " . $insertStmt->error;
-            }
-        }
+        // LOGIC REMOVED: We no longer create temporary citizens for walk-ins.
+        // if ($citizenId === null) { ... }
         
-        if ($citizenId && empty($errors)) {
-            // Create walk-in appointment (status: pending, no date/time required for walk-ins)
-            $serviceDisplay = $serviceType === 'Others' ? 'Others: ' . $otherReason : $serviceType;
-            $details = $serviceType === 'Others' ? 'Walk-in: ' . $otherReason : 'Walk-in appointment';
-            
-            // Set today's date and current time
+        // If citizen found, use their ID. If not, treat as pure walk-in (no citizen_id)
+        
+        if ($citizenId) {
+            // Case 1: Registered Citizen Walk-in
+            $insertSql = "INSERT INTO appointments (citizen_id, service_type, details, preferred_date, preferred_start, status, queue_number) VALUES (?, ?, ?, ?, ?, 'pending', 0)";
+            $stmt = $db->prepare($insertSql);
+            // Set today's date and time
             $today = date('Y-m-d');
             $currentTime = date('H:i:s');
+            $walkinDetails = $serviceType === 'Others' ? 'Walk-in: ' . $otherReason : 'Walk-in appointment';
             
-            // Insert walk-in appointment
-            $apptStmt = $db->prepare("INSERT INTO appointments (citizen_id, service_type, details, preferred_date, preferred_start, status, queue_number) VALUES (?, ?, ?, ?, ?, 'pending', 0)");
-            $apptStmt->bind_param('issss', $citizenId, $serviceDisplay, $details, $today, $currentTime);
-            
-            if ($apptStmt->execute()) {
-                audit_log($cin ?: 'WALKIN', null, 'walkin_appointment_created', 'appointments', $apptStmt->insert_id);
-                // Redirect to prevent form resubmission and show success message
+            $stmt->bind_param('issss', $citizenId, $serviceType, $walkinDetails, $today, $currentTime);
+             if ($stmt->execute()) {
+                audit_log($cin, $citizenId, 'walkin_appointment_created', 'appointments', $stmt->insert_id);
                 header('Location: walkin.php?success=1');
                 exit;
             } else {
-                $errors[] = "Error creating walk-in appointment: " . $apptStmt->error;
+                $errors[] = "Error creating appointment: " . $stmt->error;
             }
+
+        } else {
+             // Case 2: Unregistered Walk-in (No Citizen ID)
+             // We do NOT create a citizen record anymore.
+             
+             $walkinName = $firstName . ' ' . $lastName;
+             $walkinDetails = $serviceType === 'Others' ? 'Walk-in: ' . $otherReason : 'Walk-in appointment';
+             $today = date('Y-m-d');
+             $currentTime = date('H:i:s');
+             
+             $stmt = $db->prepare("INSERT INTO appointments (citizen_id, walkin_name, walkin_contact, service_type, details, preferred_date, preferred_start, status, queue_number) VALUES (NULL, ?, ?, ?, ?, ?, ?, 'pending', 0)");
+             $stmt->bind_param('ssssss', $walkinName, $contactNumber, $serviceType, $walkinDetails, $today, $currentTime);
+             
+             if ($stmt->execute()) {
+                // Log using a placeholder for user identifier since they have no ID
+                audit_log('WALKIN-GUEST', null, 'walkin_appointment_created', 'appointments', $stmt->insert_id);
+                 header('Location: walkin.php?success=1');
+                exit;
+             } else {
+                 $errors[] = "Error creating walk-in record: " . $stmt->error;
+             }
         }
     }
 }
