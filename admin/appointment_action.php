@@ -1,35 +1,27 @@
 <?php
-$page_title = "Reschedule Appointment";
-require_once __DIR__ . '/../inc/header.php';
-require_once __DIR__ . '/../inc/auth.php';
-require_admin();
+if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/../inc/db.php';
 require_once __DIR__ . '/../inc/functions.php';
 require_once __DIR__ . '/../inc/auth.php';
+
+// Auth checks
 require_admin();
 block_citizen_from_admin();
-
 
 $db = db_connect();
 
 $id = $_GET['id'] ?? null;
 if (!$id) {
-    echo "<div class='alert alert-danger'>Invalid appointment ID.</div>";
+    // If invalid ID, we can't do much. 
+    // We'll show the header then the error.
+    $page_title = "Error";
+    require_once __DIR__ . '/../inc/header.php';
+    echo "<div class='container mt-5'><div class='alert alert-danger'>Invalid appointment ID.</div></div>";
     require_once __DIR__ . '/../inc/footer.php';
     exit;
 }
 
-$stmt = $db->prepare("SELECT * FROM appointments WHERE appointment_id=?");
-$stmt->bind_param('i', $id);
-$stmt->execute();
-$app = $stmt->get_result()->fetch_assoc();
-
-if (!$app) {
-    echo "<div class='alert alert-danger'>Appointment not found.</div>";
-    require_once __DIR__ . '/../inc/footer.php';
-    exit;
-}
-
+// Check for POST submission (Save Changes)
 $errors = [];
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $date = $_POST['preferred_date'] ?? null;
@@ -44,10 +36,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt2->execute();
 
         audit_log($_SESSION['user']['username'], $_SESSION['user']['user_id'], 'appointment_rescheduled', 'appointments', $id);
+        
+        // Redirect BEFORE rendering any HTML
         header('Location: appointments.php?msg=rescheduled&filter=all');
         exit;
     }
 }
+
+// Fetch appointment details for the form
+$stmt = $db->prepare("SELECT * FROM appointments WHERE appointment_id=?");
+$stmt->bind_param('i', $id);
+$stmt->execute();
+$app = $stmt->get_result()->fetch_assoc();
+
+if (!$app) {
+    $page_title = "Error";
+    require_once __DIR__ . '/../inc/header.php';
+    echo "<div class='container mt-5'><div class='alert alert-danger'>Appointment not found.</div></div>";
+    require_once __DIR__ . '/../inc/footer.php';
+    exit;
+}
+
+// NOW we can include the header and show output
+$page_title = "Reschedule Appointment";
+require_once __DIR__ . '/../inc/header.php';
 ?>
 
 <div class="container-box col-lg-6 mx-auto">

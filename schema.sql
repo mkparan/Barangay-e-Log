@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
   role ENUM('admin','official','secretary','sk_official','captain') NOT NULL DEFAULT 'official',
   contact_number VARCHAR(30),
   email VARCHAR(120),
+  profile_picture VARCHAR(255) NULL DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   is_active TINYINT(1) DEFAULT 1
@@ -29,9 +30,11 @@ CREATE TABLE IF NOT EXISTS citizens (
   email VARCHAR(120),
   address TEXT,
   gov_affiliations TEXT,
+  profile_picture VARCHAR(255) NULL DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  is_active TINYINT(1) DEFAULT 1
+  is_active TINYINT(1) DEFAULT 1,
+  is_verified TINYINT(1) DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- announcements
@@ -59,7 +62,7 @@ CREATE TABLE IF NOT EXISTS duty_roster (
   FOREIGN KEY (official_id) REFERENCES users(user_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- presence (check-in/out) - corrected to allow NULL timestamps
+-- presence (check-in/out)
 CREATE TABLE IF NOT EXISTS presence (
   presence_id INT AUTO_INCREMENT PRIMARY KEY,
   official_id INT NOT NULL,
@@ -71,23 +74,44 @@ CREATE TABLE IF NOT EXISTS presence (
   FOREIGN KEY (official_id) REFERENCES users(user_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- appointment_availability
+CREATE TABLE IF NOT EXISTS appointment_availability (
+  availability_id INT AUTO_INCREMENT PRIMARY KEY,
+  available_date DATE NOT NULL,
+  morning_slots INT DEFAULT 25,
+  afternoon_slots INT DEFAULT 25,
+  morning_available TINYINT(1) DEFAULT 1,
+  afternoon_available TINYINT(1) DEFAULT 1,
+  is_available TINYINT(1) DEFAULT 1,
+  created_by INT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (created_by) REFERENCES users(user_id) ON DELETE SET NULL,
+  UNIQUE KEY unique_date (available_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- appointments
 CREATE TABLE IF NOT EXISTS appointments (
   appointment_id INT AUTO_INCREMENT PRIMARY KEY,
-  citizen_id INT NOT NULL,
+  citizen_id INT NULL,
+  walkin_name VARCHAR(150) NULL,
+  walkin_contact VARCHAR(50) NULL,
   official_id INT DEFAULT NULL,
+  processed_by INT NULL DEFAULT NULL,
   service_type VARCHAR(150) NOT NULL,
   details TEXT,
   preferred_date DATE,
   preferred_start TIME,
   preferred_end TIME,
-  status ENUM('pending','approved','rescheduled','declined','completed') DEFAULT 'pending',
+  time_slot ENUM('morning','afternoon') NULL DEFAULT NULL,
+  status ENUM('pending','approved','rescheduled','declined','completed','cancelled') DEFAULT 'pending',
   queue_number INT DEFAULT NULL,
   admin_notes TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (citizen_id) REFERENCES citizens(citizen_id) ON DELETE CASCADE,
-  FOREIGN KEY (official_id) REFERENCES users(user_id) ON DELETE SET NULL
+  FOREIGN KEY (official_id) REFERENCES users(user_id) ON DELETE SET NULL,
+  FOREIGN KEY (processed_by) REFERENCES users(user_id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- transactions (logbook)
