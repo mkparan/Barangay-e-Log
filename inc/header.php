@@ -40,10 +40,12 @@ $isAdminDashboard = ($currentPage === 'index.php' && strpos($currentPath, '/admi
 </head>
 <body>
 
+<?php if ($isHome): ?>
 <!-- Splash Screen -->
 <div id="splashScreen">
   <img src="/elog_barangay/public/assets/images/logo.png" alt="Barangay Duangan Logo" class="splash-logo">
 </div>
+<?php endif; ?>
 
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary-custom mb-4">
   <div class="container">
